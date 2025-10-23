@@ -1,1 +1,3 @@
-spring.application.name=code-review
+spring:
+  application:
+    name: "code-review"
