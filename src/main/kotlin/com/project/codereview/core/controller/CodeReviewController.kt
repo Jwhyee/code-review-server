@@ -16,7 +16,6 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 class CodeReviewController(
     @param:Value("\${app.github.webhook.secret-key}") private val secret: String,
-    @param:Value("\${app.github.app.private-key}") private val key: String,
     private val codeReviewService: CodeReviewService
 ) {
     private val logger = LoggerFactory.getLogger(CodeReviewController::class.java)
