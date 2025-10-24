@@ -8,8 +8,10 @@ import com.google.genai.types.ThinkingConfig
 import com.project.codereview.client.util.GenerateException
 import com.project.codereview.client.util.MODEL
 import com.project.codereview.client.util.SYSTEM_PROMPT
+import com.project.codereview.core.service.CodeReviewService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import java.util.concurrent.ConcurrentHashMap
@@ -18,6 +20,8 @@ import java.util.concurrent.ConcurrentHashMap
 class GoogleGeminiClient(
     @param:Value("\${app.google.api-key}") val apiKey: String,
 ) {
+    private val logger = LoggerFactory.getLogger(GoogleGeminiClient::class.java)
+
     private val instruction = Content.builder()
         .role("system")
         .parts(
@@ -30,7 +34,7 @@ class GoogleGeminiClient(
         .build()
 
     private val think = ThinkingConfig.builder()
-        .thinkingBudget(1000)
+        .thinkingBudget(500)
         .build()
 
     private val clientPool = ConcurrentHashMap<String, Client>()
@@ -43,8 +47,8 @@ class GoogleGeminiClient(
 
     suspend fun chat(filePath: String, prompt: String): String = withContext(Dispatchers.IO) {
         val client = getClient(filePath)
-
-        runCatching {
+        try {
+            logger.info("[Gemini] request started = {}", filePath)
             client.models.generateContentStream(
                 MODEL,
                 prompt,
@@ -54,16 +58,13 @@ class GoogleGeminiClient(
                     .build()
             ).use { stream ->
                 buildString {
-                    for (response in stream) {
-                        append(response.text())
-                    }
+                    for (response in stream) append(response.text())
                 }
             }
-        }.onSuccess {
-            clientPool.remove(filePath)
-        }.getOrElse { e ->
-            clientPool.remove(filePath)
+        } catch (e: Exception) {
             throw GenerateException("Gemini API 요청 실패", e)
+        } finally {
+            clientPool.remove(filePath)
         }
     }
 }
