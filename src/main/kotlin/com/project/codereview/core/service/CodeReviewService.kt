@@ -1,10 +1,12 @@
 package com.project.codereview.core.service
 
+import com.project.codereview.batch.FailedTaskManager
 import com.project.codereview.client.github.GithubDiffClient
 import com.project.codereview.client.github.GithubReviewClient
 import com.project.codereview.client.google.GoogleGeminiClient
 import com.project.codereview.core.dto.GithubPayload
 import com.project.codereview.core.dto.GithubReviewDto
+import com.project.codereview.core.dto.PullRequestPayload
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -19,13 +21,14 @@ import java.util.concurrent.PriorityBlockingQueue
 class CodeReviewService(
     private val githubDiffClient: GithubDiffClient,
     private val googleGeminiClient: GoogleGeminiClient,
-    private val githubReviewClient: GithubReviewClient
+    private val githubReviewClient: GithubReviewClient,
+    private val failedTaskManager: FailedTaskManager
 ) {
     private val logger = LoggerFactory.getLogger(CodeReviewService::class.java)
 
     data class ReviewTask(
-        val filePath: String,
-        val content: String,
+        val payload: PullRequestPayload,
+        val part: GithubDiffClient.FileDiff,
         val priority: Int
     ) : Comparable<ReviewTask> {
         override fun compareTo(other: ReviewTask): Int {
@@ -46,7 +49,7 @@ class CodeReviewService(
         // 우선순위 부여 — 여기서는 짧은 diff 기준
         parts.forEach { part ->
             val priority = part.content.length
-            queue.put(ReviewTask(part.filePath, part.content, priority))
+            queue.put(ReviewTask(payload.pull_request, part, priority))
         }
 
         // 동시 실행 수 계산
@@ -61,17 +64,26 @@ class CodeReviewService(
             async(Dispatchers.IO) {
                 while (true) {
                     val task = queue.poll() ?: break
+
+                    val part = task.part
+                    val filePath = part.filePath
+
                     semaphore.withPermit {
+                        val prompt = "```diff\n${part.content}\n```"
+
                         runCatching {
-                            val prompt = "```diff\n${task.content}\n```"
-                            val review = googleGeminiClient.chat(task.filePath, prompt)
-                            githubReviewClient.addReviewComment(
-                                GithubReviewDto(payload.pull_request, parts.first { it.filePath == task.filePath }, review)
-                            )
-                        }.onSuccess {
-                            logger.info("[Review Complete] file={}", task.filePath)
-                        }.onFailure { e ->
-                            logger.error("[Review Failed] file = ${task.filePath}", e)
+                            val review = googleGeminiClient.chat(filePath, prompt)
+
+                            if(review != null) {
+                                githubReviewClient.addReviewComment(
+                                    GithubReviewDto(task.payload, part, review)
+                                )
+
+                                logger.info("[Review Complete] file={}", filePath)
+                            }
+                        }.onFailure {
+                            logger.error("[Review Failed] add to retry queue")
+                            failedTaskManager.add(FailedTaskManager.OriginalTask(payload, part), prompt)
                         }
                     }
                 }

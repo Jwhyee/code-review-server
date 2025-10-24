@@ -5,6 +5,7 @@ import com.google.genai.types.Content
 import com.google.genai.types.GenerateContentConfig
 import com.google.genai.types.Part
 import com.google.genai.types.ThinkingConfig
+import com.project.codereview.batch.FailedTaskManager
 import com.project.codereview.client.util.GenerateException
 import com.project.codereview.client.util.MODEL
 import com.project.codereview.client.util.SYSTEM_PROMPT
@@ -18,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 @Component
 class GoogleGeminiClient(
-    @param:Value("\${app.google.api-key}") val apiKey: String,
+    @param:Value("\${app.google.api-key}") val apiKey: String
 ) {
     private val logger = LoggerFactory.getLogger(GoogleGeminiClient::class.java)
 
@@ -45,7 +46,7 @@ class GoogleGeminiClient(
         }
     }
 
-    suspend fun chat(filePath: String, prompt: String): String = withContext(Dispatchers.IO) {
+    suspend fun chat(filePath: String, prompt: String): String? = withContext(Dispatchers.IO) {
         val client = getClient(filePath)
         try {
             logger.info("[Gemini] request started = {}", filePath)
@@ -62,7 +63,8 @@ class GoogleGeminiClient(
                 }
             }
         } catch (e: Exception) {
-            throw GenerateException("Gemini API 요청 실패", e)
+            logger.error("[Review Failed] file = $filePath", e)
+            null
         } finally {
             clientPool.remove(filePath)
         }
