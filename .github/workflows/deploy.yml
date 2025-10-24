@@ -11,6 +11,9 @@ jobs:
       WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       API_TOKEN_GITHUB: ${{ secrets.API_TOKEN_GITHUB }}
+      APP_ID: ${{ secrets.APP_ID }}
+      APP_INSTALLATION_ID: ${{ secrets.APP_INSTALLATION_ID }}
+      APP_PEM: ${{ secrets.APP_PEM }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -75,6 +78,9 @@ jobs:
       WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       API_TOKEN_GITHUB: ${{ secrets.API_TOKEN_GITHUB }}
+      APP_ID: ${{ secrets.APP_ID }}
+      APP_INSTALLATION_ID: ${{ secrets.APP_INSTALLATION_ID }}
+      APP_PEM: ${{ secrets.APP_PEM }}
 
     steps:
       - name: Setup SSH
@@ -88,4 +94,7 @@ jobs:
             export WEBHOOK_SECRET='${{ secrets.WEBHOOK_SECRET }}' && \
             export GEMINI_API_KEY='${{ secrets.GEMINI_API_KEY }}' && \
             export API_TOKEN_GITHUB='${{ secrets.API_TOKEN_GITHUB }}' && \
+            export APP_ID='${{ secrets.APP_ID }}' && \
+            export APP_INSTALLATION_ID='${{ secrets.APP_INSTALLATION_ID }}' && \
+            export APP_PEM='${{ secrets.APP_PEM }}' && \
             ./code-review-deploy.sh"
