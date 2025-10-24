@@ -1,6 +1,6 @@
 package com.project.codereview.client.util
 
-class GenerateException(msg: String) : Exception(msg)
+class GenerateException(msg: String, e: Throwable) : Exception(msg, e)
 
 const val MODEL = "gemini-2.5-flash"
 const val SYSTEM_PROMPT = """

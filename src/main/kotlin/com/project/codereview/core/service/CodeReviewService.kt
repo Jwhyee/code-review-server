@@ -29,7 +29,7 @@ class CodeReviewService(
             payload.pull_request.prNumber
         )
 
-        val semaphore = Semaphore(5)
+        val semaphore = Semaphore(10)
         logger.info("[Review Task Start] total={}, concurrency={}", parts.size, 5)
 
         val jobs = parts.map { part ->
@@ -37,7 +37,7 @@ class CodeReviewService(
                 semaphore.withPermit {
                     runCatching {
                         val prompt = "```diff\n${part.content}\n```"
-                        val review = googleGeminiClient.chat(prompt)
+                        val review = googleGeminiClient.chat(part.filePath, prompt)
 
                         githubReviewClient.addReviewComment(GithubReviewDto(payload.pull_request, part, review))
                     }.onSuccess {

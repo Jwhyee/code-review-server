@@ -12,13 +12,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
+import java.util.concurrent.ConcurrentHashMap
 
 @Component
 class GoogleGeminiClient(
     @param:Value("\${app.google.api-key}") val apiKey: String,
 ) {
-    private val client: Client = Client.builder().apiKey(apiKey).build()
-
     private val instruction = Content.builder()
         .role("system")
         .parts(
@@ -31,23 +30,40 @@ class GoogleGeminiClient(
         .build()
 
     private val think = ThinkingConfig.builder()
-        .thinkingBudget(0)
+        .thinkingBudget(1000)
         .build()
 
-    suspend fun chat(prompt: String): String = withContext(Dispatchers.IO) {
-        client.models.generateContentStream(
-            MODEL,
-            prompt,
-            GenerateContentConfig.builder()
-                .systemInstruction(instruction)
-                .thinkingConfig(think)
-                .build()
-        ).use { stream ->
-            val sb = StringBuilder()
-            for (response in stream) {
-                sb.append(response.text())
+    private val clientPool = ConcurrentHashMap<String, Client>()
+
+    private fun getClient(filePath: String): Client {
+        return clientPool.computeIfAbsent(filePath) {
+            Client.builder().apiKey(apiKey).build()
+        }
+    }
+
+    suspend fun chat(filePath: String, prompt: String): String = withContext(Dispatchers.IO) {
+        val client = getClient(filePath)
+
+        runCatching {
+            client.models.generateContentStream(
+                MODEL,
+                prompt,
+                GenerateContentConfig.builder()
+                    .systemInstruction(instruction)
+                    .thinkingConfig(think)
+                    .build()
+            ).use { stream ->
+                buildString {
+                    for (response in stream) {
+                        append(response.text())
+                    }
+                }
             }
-            sb.toString()
+        }.onSuccess {
+            clientPool.remove(filePath)
+        }.getOrElse { e ->
+            clientPool.remove(filePath)
+            throw GenerateException("Gemini API 요청 실패", e)
         }
     }
 }
