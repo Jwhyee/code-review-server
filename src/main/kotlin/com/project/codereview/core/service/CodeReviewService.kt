@@ -31,11 +31,7 @@ class CodeReviewService(
         parts.forEach { part ->
             scope.launch {
                 try {
-                    val prompt = """
-                        ```diff
-                        ${part.content}
-                        ```
-                    """.trimIndent()
+                    val prompt = "```diff\\n${part.content}\\n```"
 
                     println("${part.filePath} = ${part.line}")
 

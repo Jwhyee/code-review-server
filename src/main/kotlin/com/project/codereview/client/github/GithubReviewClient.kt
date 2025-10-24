@@ -7,20 +7,20 @@ import org.springframework.web.reactive.function.client.WebClient
 
 @Service
 class GithubReviewClient(
-    @Value("\${app.github.api.token}") private val token: String
+    private val tokenProvider: GithubAppTokenProvider
 ) {
-    private val client = WebClient.builder()
-        .baseUrl("https://api.github.com")
-        .defaultHeader("Accept", "application/vnd.github+json")
-        .defaultHeader("Authorization", "Bearer $token")
-        .build()
-
     data class ReviewCommentRequest(
         val body: String,
         val path: String,
         val commit_id: String,
         val subject_type: String = "file"
     )
+
+    val client = WebClient.builder()
+        .baseUrl("https://api.github.com")
+        .defaultHeader("Accept", "application/vnd.github+json")
+        .defaultHeader("Authorization", "Bearer ${tokenProvider.getInstallationToken()}")
+        .build()
 
     suspend fun addReviewComment(
         dto: GithubReviewDto
