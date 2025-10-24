@@ -15,7 +15,11 @@ class CodeReviewController(
     @PostMapping("/api/code/review")
     fun net(@RequestBody codeReviewDto: CodeReviewDto): String {
         println("codeReviewDto = $codeReviewDto")
-        val response = genClient.chat(codeReviewDto.prompt)
+        val response = genClient.chat("""
+            ```diff
+            ${codeReviewDto.prompt}
+            ```
+        """.trimIndent())
         return response
     }
 }
