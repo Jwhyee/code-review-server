@@ -1,4 +1,4 @@
-package com.project.codereview.dto
+package com.project.codereview.core.dto
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper

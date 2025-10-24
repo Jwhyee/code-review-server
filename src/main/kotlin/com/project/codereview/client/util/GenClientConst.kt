@@ -1,4 +1,4 @@
-package com.project.codereview.util
+package com.project.codereview.client.util
 
 class GenerateException(msg: String) : Exception(msg)
 

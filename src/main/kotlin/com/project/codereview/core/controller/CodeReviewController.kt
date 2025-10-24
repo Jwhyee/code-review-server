@@ -1,9 +1,9 @@
-package com.project.codereview.controller
+package com.project.codereview.core.controller
 
-import com.project.codereview.dto.ActionType
-import com.project.codereview.dto.parsePayload
-import com.project.codereview.service.CodeReviewService
-import com.project.codereview.util.GithubSignature
+import com.project.codereview.core.dto.GithubActionType
+import com.project.codereview.core.dto.parsePayload
+import com.project.codereview.core.service.CodeReviewService
+import com.project.codereview.core.util.GithubSignature
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
@@ -32,11 +32,11 @@ class CodeReviewController(
         }
 
         val payload = parsePayload(rawBody)
-        val action = ActionType(payload.action)
+        val action = GithubActionType(payload.action)
         logger.info("payload = {}, action = {}", payload, action)
 
         // PR 생성 시에만 리뷰 진행
-        if (event == "pull_request" && action != null && action == ActionType.OPENED) {
+        if (event == "pull_request" && action != null && action == GithubActionType.OPENED) {
             codeReviewService.review(payload)
         }
 

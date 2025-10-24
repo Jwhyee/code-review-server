@@ -1,4 +1,4 @@
-package com.project.codereview.util
+package com.project.codereview.core.util
 
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec

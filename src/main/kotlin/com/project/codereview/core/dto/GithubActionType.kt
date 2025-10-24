@@ -1,6 +1,6 @@
-package com.project.codereview.dto
+package com.project.codereview.core.dto
 
-enum class ActionType(val value: String) {
+enum class GithubActionType(val value: String) {
     ASSIGNED("assigned"),
     AUTO_MERGE_DISABLED("auto merge disabled"),
     AUTO_MERGE_ENABLED("auto merge enabled"),
