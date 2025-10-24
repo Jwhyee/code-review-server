@@ -1,25 +1,45 @@
 package com.project.codereview.controller
 
-import com.project.codereview.dto.CodeReviewDto
-import com.project.codereview.util.GenClient
+import com.project.codereview.dto.ActionType
+import com.project.codereview.dto.GithubPayload
+import com.project.codereview.dto.parsePayload
+import com.project.codereview.service.CodeReviewService
+import com.project.codereview.util.GithubSignature
+import jakarta.servlet.http.HttpServletRequest
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.http.HttpStatus
+import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RestController
 
 @RestController
 class CodeReviewController(
-    private val genClient: GenClient,
-    @param:Value("\${app.webhook.secret-key}") private val secret: String
+    @param:Value("\${app.github.webhook.secret-key}") private val secret: String,
+    private val codeReviewService: CodeReviewService
 ) {
     @PostMapping("/api/code/review")
-    fun net(@RequestBody codeReviewDto: CodeReviewDto): String {
-        println("codeReviewDto = $codeReviewDto")
-        val response = genClient.chat("""
-            ```diff
-            ${codeReviewDto.prompt}
-            ```
-        """.trimIndent())
-        return response
+    suspend fun net(
+        @RequestHeader("X-GitHub-Event") event: String,
+        @RequestHeader("X-Hub-Signature-256", required = false) sig256: String?,
+        @RequestBody rawBody: ByteArray
+    ): ResponseEntity<String> {
+        // 서명 검증
+        if (!GithubSignature.isValid(sig256, secret, rawBody)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("invalid signature")
+        }
+
+        val payload = parsePayload(rawBody)
+        println("payload = $payload")
+        val action = ActionType(payload.action)
+        println("action = $action")
+
+        // PR 생성 시에만 리뷰 진행
+        if (event == "pull_request" && action != null && action == ActionType.OPENED) {
+            codeReviewService.review(payload)
+        }
+
+        return ResponseEntity.ok("OK")
     }
 }
