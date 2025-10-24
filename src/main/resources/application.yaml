@@ -3,7 +3,10 @@ spring:
     name: "code-review"
 
 app:
-  webhook:
-    secret-key: ${WEBHOOK_SECRET}
+  github:
+    webhook:
+      secret-key: ${WEBHOOK_SECRET}
+    api:
+      token: ${API_TOKEN_GITHUB}
   google:
     api-key: ${GEMINI_API_KEY}

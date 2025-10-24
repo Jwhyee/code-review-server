@@ -73,6 +73,7 @@ jobs:
     env:
       WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      API_TOKEN_GITHUB: ${{ secrets.API_TOKEN_GITHUB }}
 
     steps:
       - name: Setup SSH
@@ -85,4 +86,5 @@ jobs:
           ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "\
             export WEBHOOK_SECRET='${{ secrets.WEBHOOK_SECRET }}' && \
             export GEMINI_API_KEY='${{ secrets.GEMINI_API_KEY }}' && \
+            export WEBHOOK_SECRET='${{ secrets.API_TOKEN_GITHUB }}' && \
             ./code-review-deploy.sh"
