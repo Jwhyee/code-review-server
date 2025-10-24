@@ -26,9 +26,14 @@ class CodeReviewController(
         @RequestHeader("X-Hub-Signature-256", required = false) sig256: String?,
         @RequestBody rawBody: ByteArray
     ): ResponseEntity<String> {
+        if (sig256 == null) {
+            logger.warn("Missing signature header for GitHub webhook")
+            return unauthorized("Missing signature")
+        }
         // 서명 검증
         if (!GithubSignature.isValid(sig256, secret, rawBody)) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("invalid signature")
+            logger.warn("Invalid signature detected from GitHub webhook")
+            return unauthorized("Invalid signature")
         }
 
         val payload = parsePayload(rawBody)
@@ -36,10 +41,18 @@ class CodeReviewController(
         logger.info("payload = {}, action = {}", payload, action)
 
         // PR 생성 시에만 리뷰 진행
-        if (event == "pull_request" && action != null && action == GithubActionType.OPENED) {
-            codeReviewService.review(payload)
+        when (event) {
+            "pull_request" -> when (GithubActionType(payload.action)) {
+                GithubActionType.OPENED -> codeReviewService.review(payload)
+                else -> logger.info("Ignored pull_request event: ${payload.action}")
+            }
+            else -> logger.debug("Unhandled GitHub event: $event")
         }
 
-        return ResponseEntity.ok("OK")
+        return ResponseEntity.ok("Request completed")
     }
+
+    private fun unauthorized(
+        message: String
+    ) = ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(message)
 }
