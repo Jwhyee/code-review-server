@@ -5,9 +5,14 @@ import com.google.genai.types.Content
 import com.google.genai.types.GenerateContentConfig
 import com.google.genai.types.Part
 import com.google.genai.types.ThinkingConfig
+import org.springframework.beans.factory.annotation.Value
+import org.springframework.stereotype.Component
 
-object GenClient {
-    private val client: Client = Client.builder().apiKey(API_KEY).build()
+@Component
+class GenClient(
+    @param:Value("\${app.google.api-key}") val apiKey: String,
+) {
+    private val client: Client = Client.builder().apiKey(apiKey).build()
 
     private val instruction = Content.builder()
         .role("system")
