@@ -18,7 +18,7 @@ class CodeReviewService(
     private val googleGeminiClient: GoogleGeminiClient,
     private val githubReviewClient: GithubReviewClient
 ) {
-    private val logger = LoggerFactory.getLogger(CodeReviewController::class.java)
+    private val logger = LoggerFactory.getLogger(CodeReviewService::class.java)
     private val scope = CoroutineScope(Dispatchers.IO)
 
     fun review(payload: GithubPayload) {
