@@ -1,6 +1,5 @@
 package com.project.codereview.client.github
 
-import com.project.codereview.core.dto.GithubPayload
 import com.project.codereview.core.dto.GithubReviewDto
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
@@ -19,8 +18,8 @@ class GithubReviewClient(
     data class ReviewCommentRequest(
         val body: String,
         val path: String,
-        val line: Int,
-        val side: String = "RIGHT",
+        val commit_id: String,
+        val subject_type: String = "file"
     )
 
     suspend fun addReviewComment(

@@ -19,6 +19,7 @@ class GithubDiffClient(
 
     private val headerRegex = Regex("""a/(.+?) b/(.+)""")
     private val hunkHeaderRegex = Regex("""\@\@ [^+]+\+(\d+),?(\d+)? \@\@""")
+    private val deletedFileRegex = Regex("""\+\+\+ /dev/null""")
 
     private val client = WebClient.builder()
         .baseUrl("https://api.github.com")
@@ -26,26 +27,35 @@ class GithubDiffClient(
         .build()
 
     private fun findLastChangedLine(diffContent: String): Int {
-        val lines = diffContent.lines()
+        // 삭제된 파일이면 무조건 0 리턴
+        if (deletedFileRegex.containsMatchIn(diffContent)) {
+            return 0
+        }
 
-        var lastLine = 0
-        var currentStart = 0
+        var maxLastLine = 0
+        var currentLineNumber = 0
 
-        for (line in lines) {
+        for (line in diffContent.lines()) {
             val match = hunkHeaderRegex.find(line)
             if (match != null) {
-                currentStart = match.groupValues[1].toInt()
+                currentLineNumber = match.groupValues[1].toInt()
                 continue
             }
-            if (line.startsWith("+") && !line.startsWith("+++")) {
-                lastLine = currentStart
-                currentStart++
-            } else if (!line.startsWith("-")) {
-                currentStart++
+
+            when {
+                line.startsWith("+") && !line.startsWith("+++") -> {
+                    if (currentLineNumber > maxLastLine) {
+                        maxLastLine = currentLineNumber
+                    }
+                    currentLineNumber++
+                }
+                !line.startsWith("-") -> {
+                    currentLineNumber++
+                }
             }
         }
 
-        return lastLine
+        return maxLastLine
     }
 
     private fun splitDiffByFile(diff: String): List<FileDiff> =
@@ -55,20 +65,26 @@ class GithubDiffClient(
                 val lines = chunk.trim().lines()
                 val header = lines.firstOrNull() ?: return@mapNotNull null
 
-                // 헤더에서 파일 경로 안전하게 추출
                 val match = headerRegex.find(header)
                 val filePath = match?.groupValues?.getOrNull(1)?.trim()
-
                 if (filePath.isNullOrBlank()) {
                     logger.warn("잘못된 diff 헤더 감지됨 = {}", header)
                     return@mapNotNull null
                 }
 
                 val content = "diff --git $chunk".trim()
-                FileDiff(filePath, content, findLastChangedLine(chunk))
+                val lastChangedLine = findLastChangedLine(chunk)
+
+                // 삭제된 파일(line=0)은 코멘트 불가능하므로 필터링
+                if (lastChangedLine == 0) {
+                    logger.info("삭제된 파일 감지, 코멘트 대상 제외: {}", filePath)
+                    return@mapNotNull null
+                }
+
+                FileDiff(filePath, content, lastChangedLine)
             }
 
-    suspend fun getPrDiff(
+    fun getPrDiff(
         owner: String,
         repo: String,
         prNumber: String
@@ -78,8 +94,6 @@ class GithubDiffClient(
             .header("Authorization", "Bearer $token")
             .retrieve()
             .bodyToMono(String::class.java)
-            .block()!!.also {
-                println("diff = $it")
-            }
+            .block()!!
     )
 }

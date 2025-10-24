@@ -9,6 +9,6 @@ data class GithubReviewDto(
     val review: String
 ) {
     fun toReviewCommentRequest() = GithubReviewClient.ReviewCommentRequest(
-        review, diff.filePath, diff.line
+        review, diff.filePath, payload.head.sha
     )
 }

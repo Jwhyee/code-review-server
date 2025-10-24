@@ -8,6 +8,8 @@ import com.google.genai.types.ThinkingConfig
 import com.project.codereview.client.util.GenerateException
 import com.project.codereview.client.util.MODEL
 import com.project.codereview.client.util.SYSTEM_PROMPT
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 
@@ -32,12 +34,20 @@ class GoogleGeminiClient(
         .thinkingBudget(0)
         .build()
 
-    suspend fun chat(prompt: String) = client.models.generateContent(
-        MODEL,
-        prompt,
-        GenerateContentConfig.builder()
-            .systemInstruction(instruction)
-            .thinkingConfig(think)
-            .build()
-    ).text() ?: throw GenerateException("Generating fail")
+    suspend fun chat(prompt: String): String = withContext(Dispatchers.IO) {
+        client.models.generateContentStream(
+            MODEL,
+            prompt,
+            GenerateContentConfig.builder()
+                .systemInstruction(instruction)
+                .thinkingConfig(think)
+                .build()
+        ).use { stream ->
+            val sb = StringBuilder()
+            for (response in stream) {
+                sb.append(response.text())
+            }
+            sb.toString()
+        }
+    }
 }

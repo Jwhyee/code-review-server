@@ -14,12 +14,18 @@ data class GithubPayload(
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class PullRequestPayload(
     val url: String,
+    val head: PullRequestHeadPayload
 ) {
     private val _urls = url.removePrefix("https://").split("/")
     val owner = _urls[2]
     val repo = _urls[3]
     val prNumber = _urls[5]
 }
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class PullRequestHeadPayload(
+    val sha: String
+)
 
 val mapper = jacksonObjectMapper()
 
