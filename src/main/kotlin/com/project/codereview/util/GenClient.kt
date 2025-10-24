@@ -29,7 +29,7 @@ class GenClient(
         .thinkingBudget(0)
         .build()
 
-    fun chat(prompt: String) = client.models.generateContent(
+    suspend fun chat(prompt: String) = client.models.generateContent(
         MODEL,
         prompt,
         GenerateContentConfig.builder()
