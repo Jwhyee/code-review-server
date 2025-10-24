@@ -1,15 +1,18 @@
-package com.project.codereview.util
+package com.project.codereview.client.google
 
 import com.google.genai.Client
 import com.google.genai.types.Content
 import com.google.genai.types.GenerateContentConfig
 import com.google.genai.types.Part
 import com.google.genai.types.ThinkingConfig
+import com.project.codereview.client.util.GenerateException
+import com.project.codereview.client.util.MODEL
+import com.project.codereview.client.util.SYSTEM_PROMPT
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 
 @Component
-class GenClient(
+class GoogleGeminiClient(
     @param:Value("\${app.google.api-key}") val apiKey: String,
 ) {
     private val client: Client = Client.builder().apiKey(apiKey).build()
@@ -29,7 +32,7 @@ class GenClient(
         .thinkingBudget(0)
         .build()
 
-    fun chat(prompt: String) = client.models.generateContent(
+    suspend fun chat(prompt: String) = client.models.generateContent(
         MODEL,
         prompt,
         GenerateContentConfig.builder()
