@@ -10,6 +10,7 @@ jobs:
     env:
       WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      API_TOKEN_GITHUB: ${{ secrets.API_TOKEN_GITHUB }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
