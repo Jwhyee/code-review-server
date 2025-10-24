@@ -1,0 +1,7 @@
+spring:
+  application:
+    name: "code-review"
+
+app:
+  google:
+    api-key: ${GEMINI_API_KEY}
