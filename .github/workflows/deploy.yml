@@ -15,6 +15,13 @@ jobs:
       APP_INSTALLATION_ID: ${{ secrets.APP_INSTALLATION_ID }}
       APP_PEM: ${{ secrets.APP_PEM }}
     steps:
+      - name: Clean GitHub Actions cache only
+        run: |
+          echo "🧹 Cleaning GitHub Actions cache at ~/Library/Caches/actions..."
+          du -sh ~/Library/Caches/actions || true
+          rm -rf ~/Library/Caches/actions || true
+          echo "✅ Cleanup completed."
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
