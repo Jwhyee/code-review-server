@@ -2,6 +2,7 @@ package com.project.codereview.core.service
 
 import com.project.codereview.batch.FailedTaskManager
 import com.project.codereview.client.github.GithubDiffClient
+import com.project.codereview.client.github.GithubDiffUtils
 import com.project.codereview.client.github.GithubReviewClient
 import com.project.codereview.client.google.GoogleGeminiClient
 import com.project.codereview.core.dto.GithubPayload
@@ -28,7 +29,7 @@ class CodeReviewService(
 
     data class ReviewTask(
         val payload: PullRequestPayload,
-        val part: GithubDiffClient.FileDiff,
+        val part: GithubDiffUtils.FileDiff,
         val priority: Int
     ) : Comparable<ReviewTask> {
         override fun compareTo(other: ReviewTask): Int {
@@ -38,11 +39,10 @@ class CodeReviewService(
     }
 
     suspend fun review(payload: GithubPayload) = coroutineScope {
-        val parts = githubDiffClient.getPrDiff(
-            payload.pull_request.owner,
-            payload.pull_request.repo,
-            payload.pull_request.prNumber
-        )
+        val diff = payload.pull_request.run {
+            githubDiffClient.getPrDiff(owner, repo, prNumber)
+        }
+        val parts = GithubDiffUtils.splitDiffByFile(diff)
 
         val queue = PriorityBlockingQueue<ReviewTask>()
 
@@ -74,7 +74,7 @@ class CodeReviewService(
                         runCatching {
                             val review = googleGeminiClient.chat(filePath, prompt)
 
-                            if(review != null) {
+                            if (review != null) {
                                 githubReviewClient.addReviewComment(
                                     GithubReviewDto(task.payload, part, review)
                                 )
