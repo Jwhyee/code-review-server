@@ -1,6 +1,7 @@
 package com.project.codereview.batch
 
 import com.project.codereview.client.github.GithubDiffClient
+import com.project.codereview.client.github.GithubDiffUtils
 import com.project.codereview.core.dto.GithubPayload
 import com.project.codereview.core.dto.GithubReviewDto
 import org.springframework.stereotype.Component
@@ -11,7 +12,7 @@ import java.util.concurrent.atomic.AtomicInteger
 class FailedTaskManager {
     data class OriginalTask(
         val payload: GithubPayload,
-        val part: GithubDiffClient.FileDiff
+        val part: GithubDiffUtils.FileDiff
     ) {
         fun toGithubReviewDto(review: String): GithubReviewDto {
             return GithubReviewDto(payload.pull_request, part, review)
