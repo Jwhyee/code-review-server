@@ -7,6 +7,7 @@ import com.project.codereview.client.github.GithubReviewClient
 data class GithubReviewDto(
     val payload: PullRequestPayload,
     val diff: GithubDiffUtils.FileDiff,
+    val installationId: String,
     val review: String
 ) {
     fun toReviewCommentRequest() = GithubReviewClient.ReviewCommentRequest(

@@ -16,18 +16,18 @@ class GithubReviewClient(
         val subject_type: String = "file"
     )
 
-    val client = WebClient.builder()
-        .baseUrl("https://api.github.com")
-        .defaultHeader("Accept", "application/vnd.github+json")
-        .defaultHeader("Authorization", "Bearer ${tokenProvider.getInstallationToken()}")
-        .build()
-
     suspend fun addReviewComment(
         dto: GithubReviewDto
     ) {
         val uri = dto.payload.run {
             "/repos/$owner/$repo/pulls/$prNumber/comments"
         }
+
+        val client = WebClient.builder()
+            .baseUrl("https://api.github.com")
+            .defaultHeader("Accept", "application/vnd.github+json")
+            .defaultHeader("Authorization", "Bearer ${tokenProvider.getInstallationToken(dto.installationId)}")
+            .build()
 
         client.post()
             .uri(uri)

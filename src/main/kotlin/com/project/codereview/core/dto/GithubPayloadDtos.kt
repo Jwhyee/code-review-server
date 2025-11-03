@@ -8,7 +8,13 @@ import com.fasterxml.jackson.module.kotlin.readValue
 data class GithubPayload(
     val action: String,
     val number: String,
+    val installation: InstallationPayload,
     val pull_request: PullRequestPayload
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class InstallationPayload(
+    val id: String
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)

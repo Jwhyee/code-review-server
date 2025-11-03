@@ -20,7 +20,7 @@ class ReviewWorker(
         runCatching {
             val review = googleGeminiClient.chat(filePath, prompt)
             if (review != null) {
-                githubReviewClient.addReviewComment(GithubReviewDto(task.payload, task.part, review))
+                githubReviewClient.addReviewComment(GithubReviewDto(task.payload, task.part, payload.installation.id, review))
             }
         }.onFailure {
             failedTaskManager.add(FailedTaskManager.OriginalTask(payload, task.part), prompt)
