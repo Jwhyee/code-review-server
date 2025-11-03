@@ -23,7 +23,6 @@ class FailedTaskRetryScheduler(
             val batchSize = 10
             val batch = failedTaskManager.pollBatch(batchSize)
             if (batch.isEmpty()) {
-                logger.info("[Retry Skip] queue is empty")
                 return@launch
             }
 
