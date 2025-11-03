@@ -19,7 +19,6 @@ class GithubReviewClient(
     val client = WebClient.builder()
         .baseUrl("https://api.github.com")
         .defaultHeader("Accept", "application/vnd.github+json")
-        .defaultHeader("Authorization", "Bearer ${tokenProvider.getInstallationToken()}")
         .build()
 
     suspend fun addReviewComment(
@@ -31,6 +30,7 @@ class GithubReviewClient(
 
         client.post()
             .uri(uri)
+            .header("Authorization", "Bearer ${tokenProvider.getInstallationToken(dto.installationId)}")
             .bodyValue(dto.toReviewCommentRequest())
             .retrieve()
             .bodyToMono(String::class.java)

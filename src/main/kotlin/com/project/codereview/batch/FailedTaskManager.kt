@@ -15,7 +15,7 @@ class FailedTaskManager {
         val part: GithubDiffUtils.FileDiff
     ) {
         fun toGithubReviewDto(review: String): GithubReviewDto {
-            return GithubReviewDto(payload.pull_request, part, review)
+            return GithubReviewDto(payload.pull_request, part, payload.installation.id, review)
         }
     }
 

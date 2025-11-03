@@ -6,7 +6,6 @@ app:
   github:
     app:
       app-id: ${APP_ID}
-      installation-id: ${APP_INSTALLATION_ID}
       private-key: ${APP_PEM}
     webhook:
       secret-key: ${WEBHOOK_SECRET}
