@@ -12,7 +12,6 @@ jobs:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       API_TOKEN_GITHUB: ${{ secrets.API_TOKEN_GITHUB }}
       APP_ID: ${{ secrets.APP_ID }}
-      APP_INSTALLATION_ID: ${{ secrets.APP_INSTALLATION_ID }}
       APP_PEM: ${{ secrets.APP_PEM }}
     steps:
       - name: Clean GitHub Actions cache only
@@ -86,7 +85,6 @@ jobs:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       API_TOKEN_GITHUB: ${{ secrets.API_TOKEN_GITHUB }}
       APP_ID: ${{ secrets.APP_ID }}
-      APP_INSTALLATION_ID: ${{ secrets.APP_INSTALLATION_ID }}
       APP_PEM: ${{ secrets.APP_PEM }}
 
     steps:

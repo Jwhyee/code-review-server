@@ -13,7 +13,6 @@ import java.util.*
 @Component
 class GithubAppTokenProvider(
     @param:Value("\${app.github.app.app-id}") private val appId: String,
-    @param:Value("\${app.github.app.installation-id}") private val installationId: String,
     @param:Value("\${app.github.app.private-key}") private val appPem: String
 ) {
     @Volatile private var cachedToken: String? = null
@@ -39,7 +38,7 @@ class GithubAppTokenProvider(
             .compact()
     }
 
-    fun getInstallationToken(): String {
+    fun getInstallationToken(installationId: String): String {
         val now = Instant.now()
         if (cachedToken != null && expiresAt?.isAfter(now.plusSeconds(30)) == true) {
             return cachedToken!!                         // 만료 30초 전까지 재사용
