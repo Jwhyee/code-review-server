@@ -43,7 +43,10 @@ class CodeReviewController(
         // PR 생성 시에만 리뷰 진행
         when (event) {
             "pull_request" -> when (GithubActionType(payload.action)) {
-                GithubActionType.OPENED -> codeReviewService.review(payload)
+                GithubActionType.OPENED,
+                GithubActionType.REOPENED -> {
+                    codeReviewService.review(payload)
+                }
                 else -> logger.info("Ignored pull_request event: ${payload.action}")
             }
             else -> logger.debug("Unhandled GitHub event: $event")
