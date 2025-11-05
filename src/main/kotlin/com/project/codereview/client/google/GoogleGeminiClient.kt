@@ -5,11 +5,8 @@ import com.google.genai.types.Content
 import com.google.genai.types.GenerateContentConfig
 import com.google.genai.types.Part
 import com.google.genai.types.ThinkingConfig
-import com.project.codereview.batch.FailedTaskManager
-import com.project.codereview.client.util.GenerateException
 import com.project.codereview.client.util.MODEL
-import com.project.codereview.client.util.SYSTEM_PROMPT
-import com.project.codereview.core.service.CodeReviewService
+import com.project.codereview.client.util.ReviewLanguage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
@@ -23,16 +20,16 @@ class GoogleGeminiClient(
 ) {
     private val logger = LoggerFactory.getLogger(GoogleGeminiClient::class.java)
 
-    private val instruction = Content.builder()
-        .role("system")
-        .parts(
-            listOf(
-                Part.builder()
-                    .text(SYSTEM_PROMPT)
-                    .build()
-            )
-        )
-        .build()
+    private val instructionMap = mapOf(
+        *ReviewLanguage.entries.map {
+            val content = Content.builder()
+                .role("system")
+                .parts(listOf(Part.builder().text(it.prompt).build()))
+                .build()
+
+            it to content
+        }.toTypedArray()
+    )
 
     private val think = ThinkingConfig.builder()
         .thinkingBudget(500)
@@ -47,6 +44,9 @@ class GoogleGeminiClient(
     }
 
     suspend fun chat(filePath: String, prompt: String): String? = withContext(Dispatchers.IO) {
+        val language = ReviewLanguage.fromExtension(filePath)
+        val instruction = instructionMap[language] ?: instructionMap[ReviewLanguage.KT]!!
+
         val client = getClient(filePath)
         try {
             logger.info("[Gemini] request started = {}", filePath)
@@ -68,5 +68,6 @@ class GoogleGeminiClient(
         } finally {
             clientPool.remove(filePath)
         }
+        ""
     }
 }
