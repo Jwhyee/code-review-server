@@ -48,14 +48,14 @@ class ReviewExecutor(
 
         return try {
             if (!review.contains(REJECT_REVIEW)) {
-//                githubReviewClient.addReviewComment(
-//                    GithubReviewDto(
-//                        cmd.payload.pull_request,
-//                        cmd.diff,
-//                        cmd.payload.installation.id,
-//                        review
-//                    )
-//                )
+                githubReviewClient.addReviewComment(
+                    GithubReviewDto(
+                        cmd.payload.pull_request,
+                        cmd.diff,
+                        cmd.payload.installation.id,
+                        review
+                    )
+                )
             }
             ReviewOutcome.Success()
         } catch (t: Throwable) {
