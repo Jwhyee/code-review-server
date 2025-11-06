@@ -1,75 +1,257 @@
 package com.project.codereview.client.github
 
-import org.slf4j.LoggerFactory
-
 object GithubDiffUtils {
-    data class FileDiff(
-        val filePath: String,
-        val content: String,
-        val line: Int
-    )
 
-    private val logger = LoggerFactory.getLogger(GithubDiffUtils::class.java)
-
-    private val headerRegex = Regex("""a/(.+?) b/(.+)""")
-    private val hunkHeaderRegex = Regex("""\@\@ [^+]+\+(\d+),?(\d+)? \@\@""")
-    private val deletedFileRegex = Regex("""\+\+\+ /dev/null""")
-
-    private fun findLastChangedLine(diffContent: String): Int {
-        // 삭제된 파일이면 무조건 0 리턴
-        if (deletedFileRegex.containsMatchIn(diffContent)) {
-            return 0
-        }
-
-        var maxLastLine = 0
-        var currentLineNumber = 0
-
-        for (line in diffContent.lines()) {
-            val match = hunkHeaderRegex.find(line)
-            if (match != null) {
-                currentLineNumber = match.groupValues[1].toInt()
-                continue
-            }
-
-            when {
-                line.startsWith("+") && !line.startsWith("+++") -> {
-                    if (currentLineNumber > maxLastLine) {
-                        maxLastLine = currentLineNumber
-                    }
-                    currentLineNumber++
-                }
-
-                !line.startsWith("-") -> {
-                    currentLineNumber++
-                }
-            }
-        }
-
-        return maxLastLine
+    data class DiffInfo(
+        val path: String,
+        val startLine: Int,
+        val endLine: Int,
+        val side: String,
+        val snippet: String
+    ) {
+        fun toGithubReviewRequest(
+            commitId: String,
+            body: String
+        ) = GithubReviewClient.ReviewCommentRequest(
+            body = body,
+            path = path,
+            commit_id = commitId,
+            start_line = startLine,
+            start_side = side,
+            line = endLine,
+            side = side
+        )
     }
 
-    fun splitDiffByFile(diff: String): List<FileDiff> = diff.split("diff --git")
-        .drop(1)
-        .mapNotNull { chunk ->
-            val lines = chunk.trim().lines()
-            val header = lines.firstOrNull() ?: return@mapNotNull null
+    data class FileContext(
+        val path: String,
+        val originSnippet: String,
+        val diffs: List<DiffInfo>
+    )
 
-            val match = headerRegex.find(header)
-            val filePath = match?.groupValues?.getOrNull(1)?.trim()
-            if (filePath.isNullOrBlank()) {
-                logger.warn("잘못된 diff 헤더 감지됨 = {}", header)
-                return@mapNotNull null
+    private val fileHeader = Regex("""^diff --git a/(.+?) b/(.+)$""")
+    private val hunkHeader = Regex("""@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@""")
+    private val importLineRegex = Regex("""^[+\- ]\s*import\b""")
+
+    private fun isImportLineInDiff(line: String): Boolean = importLineRegex.containsMatchIn(line)
+
+    private fun buildRequests(diffText: String): List<DiffInfo> {
+        val text = diffText.replace("\r\n", "\n")
+        val lines = text.lineSequence().toList()
+
+        val ranges = mutableListOf<DiffInfo>()
+        var currentPath: String? = null
+
+        var inHunk = false
+        var oldLine = 0
+        var newLine = 0
+
+        var collectingRight = false
+        var rightStartNew: Int? = null
+        var rightEndNew: Int? = null
+        val rightSnippet = mutableListOf<String>()
+
+        var leftMinOld: Int? = null
+        var leftMaxOld: Int? = null
+        val leftSnippet = mutableListOf<String>()
+        var sawPlusInHunk = false
+
+        fun endRightBlockIfAny(path: String) {
+            if (collectingRight && rightStartNew != null && rightEndNew != null) {
+                val filtered = rightSnippet.filterNot(::isImportLineInDiff)
+                if (filtered.isNotEmpty()) {
+                    ranges += DiffInfo(
+                        path = path,
+                        startLine = rightStartNew!!,
+                        endLine = rightEndNew!!,
+                        side = "RIGHT",
+                        snippet = filtered.joinToString("\n")
+                    )
+                }
             }
-
-            val content = "diff --git $chunk".trim()
-            val lastChangedLine = findLastChangedLine(chunk)
-
-            // 삭제된 파일(line=0)은 코멘트 불가능하므로 필터링
-            if (lastChangedLine == 0) {
-                logger.info("삭제된 파일 감지, 코멘트 대상 제외: {}", filePath)
-                return@mapNotNull null
-            }
-
-            FileDiff(filePath, content, lastChangedLine)
+            collectingRight = false
+            rightStartNew = null
+            rightEndNew = null
+            rightSnippet.clear()
         }
+
+        fun flushHunkRanges() {
+            val path = currentPath ?: return
+            endRightBlockIfAny(path)
+
+            if (!sawPlusInHunk && leftMinOld != null && leftMaxOld != null && leftSnippet.isNotEmpty()) {
+                val filtered = leftSnippet.filterNot(::isImportLineInDiff)
+                if (filtered.isNotEmpty()) {
+                    ranges += DiffInfo(
+                        path = path,
+                        startLine = leftMinOld!!,
+                        endLine = leftMaxOld!!,
+                        side = "LEFT",
+                        snippet = filtered.joinToString("\n")
+                    )
+                }
+            }
+
+            leftMinOld = null
+            leftMaxOld = null
+            leftSnippet.clear()
+            sawPlusInHunk = false
+        }
+
+        fun startNewHunk(oldStart: Int, newStart: Int) {
+            if (inHunk) flushHunkRanges()
+            inHunk = true
+            oldLine = oldStart
+            newLine = newStart
+
+            collectingRight = false
+            rightStartNew = null
+            rightEndNew = null
+            rightSnippet.clear()
+
+            leftMinOld = null
+            leftMaxOld = null
+            leftSnippet.clear()
+            sawPlusInHunk = false
+        }
+
+        lines.forEach { rawLine ->
+            val raw = rawLine.trimEnd('\r')
+            when {
+                raw.startsWith("diff --git ") -> {
+                    if (inHunk) {
+                        flushHunkRanges()
+                        inHunk = false
+                    }
+                    val m = fileHeader.matchEntire(raw)
+                    currentPath = if (m != null) {
+                        var p = m.groupValues[2]
+                        if (p.startsWith("b/")) p = p.substring(2)
+                        p
+                    } else null
+                }
+
+                raw.startsWith("index ") || raw.startsWith("--- ") || raw.startsWith("+++ ") -> Unit
+
+                raw.startsWith("@@ ") -> {
+                    val m = hunkHeader.find(raw)
+                    if (m != null) {
+                        val oldStart = m.groupValues[1].toInt()
+                        val newStart = m.groupValues[3].toInt()
+                        startNewHunk(oldStart, newStart)
+                    }
+                }
+
+                inHunk && currentPath != null -> {
+                    if (raw.isEmpty()) return@forEach
+                    when (raw[0]) {
+                        ' ' -> {
+                            if (collectingRight) {
+                                rightSnippet += raw
+                                rightEndNew = newLine
+                            }
+                            oldLine++; newLine++
+                        }
+
+                        '+' -> {
+                            sawPlusInHunk = true
+                            if (!collectingRight) {
+                                collectingRight = true
+                                rightStartNew = newLine
+                            }
+                            rightSnippet += raw
+                            rightEndNew = newLine
+                            newLine++
+                        }
+
+                        '-' -> {
+                            if (collectingRight) endRightBlockIfAny(currentPath!!)
+                            if (leftMinOld == null) leftMinOld = oldLine
+                            leftMaxOld = oldLine
+                            leftSnippet += raw
+                            oldLine++
+                        }
+
+                        '\\' -> Unit
+                        else -> Unit
+                    }
+                }
+
+                else -> Unit
+            }
+        }
+
+        if (inHunk) flushHunkRanges()
+        return ranges
+    }
+
+    private fun buildOrigins(
+        diffText: String,
+        filterImportsInOrigin: Boolean = false
+    ): Map<String, String> {
+        val text = diffText.replace("\r\n", "\n")
+        val lines = text.lineSequence().toList()
+
+        val originByFile = mutableMapOf<String, MutableList<String>>()
+        var currentPath: String? = null
+        var inHunk = false
+
+        lines.forEach { rawLine ->
+            val raw = rawLine.trimEnd('\r')
+            when {
+                raw.startsWith("diff --git ") -> {
+                    inHunk = false
+                    val m = fileHeader.matchEntire(raw)
+                    currentPath = if (m != null) {
+                        var p = m.groupValues[2]
+                        if (p.startsWith("b/")) p = p.substring(2)
+                        p
+                    } else null
+                    if (currentPath != null) originByFile.putIfAbsent(currentPath!!, mutableListOf())
+                }
+
+                raw.startsWith("@@ ") -> {
+                    if (currentPath != null) inHunk = true
+                }
+
+                inHunk && currentPath != null -> {
+                    if (raw.isEmpty()) return@forEach
+                    // origin은 + / - 만 수집 (원하면 ' '도 포함 가능)
+                    if (raw[0] == '+' || raw[0] == '-') {
+                        if (!filterImportsInOrigin || !isImportLineInDiff(raw)) {
+                            originByFile[currentPath]!!.add(raw)
+                        }
+                    }
+                    if (raw.startsWith("diff --git ") || raw.startsWith("index ") || raw.startsWith("--- ") || raw.startsWith(
+                            "+++ "
+                        )
+                    ) {
+                        // 안전장치: 예외적 케이스 방지
+                        inHunk = false
+                    }
+                }
+
+                else -> Unit
+            }
+        }
+
+        return originByFile.mapValues { (_, v) -> v.joinToString("\n") }
+    }
+
+    fun buildFileContexts(
+        diffText: String,
+        filterImportsInOrigin: Boolean = false
+    ): List<FileContext> {
+        val diffs = buildRequests(diffText)
+        val originMap = buildOrigins(diffText, filterImportsInOrigin)
+
+        return diffs.groupBy { it.path }
+            .map { (path, list) ->
+                FileContext(
+                    path = path,
+                    originSnippet = originMap[path].orEmpty(),
+                    diffs = list
+                )
+            }
+    }
 }
