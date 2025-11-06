@@ -1,6 +1,5 @@
 package com.project.codereview.batch
 
-import com.project.codereview.client.github.GithubDiffClient
 import com.project.codereview.client.github.GithubDiffUtils
 import com.project.codereview.core.dto.GithubPayload
 import com.project.codereview.core.dto.GithubReviewDto
@@ -12,10 +11,10 @@ import java.util.concurrent.atomic.AtomicInteger
 class FailedTaskManager {
     data class OriginalTask(
         val payload: GithubPayload,
-        val part: GithubDiffUtils.FileDiff
+        val diff: GithubDiffUtils.DiffInfo
     ) {
         fun toGithubReviewDto(review: String): GithubReviewDto {
-            return GithubReviewDto(payload.pull_request, part, payload.installation.id, review)
+            return GithubReviewDto(payload.pull_request, diff, payload.installation.id, review)
         }
     }
 

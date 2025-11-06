@@ -22,12 +22,7 @@ class GoogleGeminiClient(
 
     private val instructionMap = mapOf(
         *ReviewLanguage.entries.map {
-            val content = Content.builder()
-                .role("system")
-                .parts(listOf(Part.builder().text(it.prompt).build()))
-                .build()
-
-            it to content
+            it to getContent(it.prompt)
         }.toTypedArray()
     )
 
@@ -43,11 +38,19 @@ class GoogleGeminiClient(
         }
     }
 
-    suspend fun chat(filePath: String, prompt: String): String? = withContext(Dispatchers.IO) {
-        val language = ReviewLanguage.fromExtension(filePath)
-        val instruction = instructionMap[language] ?: instructionMap[ReviewLanguage.KT]!!
+    fun getContent(prompt: String) = Content.builder()
+        .role("system")
+        .parts(listOf(Part.builder().text(prompt).build()))
+        .build()
 
-        val client = getClient(filePath)
+    suspend fun chat(
+        filePath: String,
+        prompt: String,
+        instruction: Content = ReviewLanguage.fromExtension(filePath).let { language ->
+            instructionMap[language] ?: instructionMap[ReviewLanguage.KT]!!
+        },
+    ): String? = withContext(Dispatchers.IO) {
+        val client = getClient(filePath + prompt)
         try {
             logger.info("[Gemini] request started = {}", filePath)
             client.models.generateContentStream(
@@ -68,6 +71,5 @@ class GoogleGeminiClient(
         } finally {
             clientPool.remove(filePath)
         }
-        ""
     }
 }

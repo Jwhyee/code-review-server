@@ -1,75 +1,72 @@
 package com.project.codereview.batch
 
-import com.project.codereview.client.github.GithubReviewClient
-import com.project.codereview.client.google.GoogleGeminiClient
+import com.project.codereview.core.service.ReviewCommand
+import com.project.codereview.core.service.ReviewExecutor
+import com.project.codereview.core.service.ReviewOutcome
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
+import kotlin.math.min
+import kotlin.random.Random
 
 @Component
 class FailedTaskRetryScheduler(
-    private val googleGeminiClient: GoogleGeminiClient,
-    private val githubReviewClient: GithubReviewClient,
+    private val executor: ReviewExecutor,
     private val failedTaskManager: FailedTaskManager
 ) {
     private val logger = org.slf4j.LoggerFactory.getLogger(FailedTaskRetryScheduler::class.java)
     private val maxRetry = 5
 
-    @Scheduled(fixedDelay = 120_000) // 2분마다 스케줄링
+    @Scheduled(fixedDelay = 120_000)
     fun retryFailedTasks() {
         CoroutineScope(Dispatchers.IO).launch {
-            val batchSize = 10
-            val batch = failedTaskManager.pollBatch(batchSize)
-            if (batch.isEmpty()) {
-                return@launch
-            }
+            val batch = failedTaskManager.pollBatch(10)
+            if (batch.isEmpty()) return@launch
 
-            logger.info(
-                "[Retry Start] size = {}, queueSize = {}",
-                batch.size,
-                failedTaskManager.size()
-            )
+            logger.info("[Retry Start] size = {}, queueSize = {}", batch.size, failedTaskManager.size())
 
             batch.forEach { task ->
                 val original = task.task
-                val filePath = original.part.filePath
                 val retryCount = task.retryCount
-                val promptLength = task.prompt.length
+                val cmd = ReviewCommand(
+                    payload = original.payload,
+                    diff = original.diff,
+                    promptOverride = task.prompt // 재시도는 기존 프롬프트 유지
+                )
 
-                // 재시도 횟수 초과 시 포기
                 if (retryCount >= maxRetry) {
-                    logger.error("[Give Up] file={} after {} retries", filePath, retryCount)
+                    logger.error("[Give Up] file={} after {} retries", original.diff.path, retryCount)
                     return@forEach
                 }
 
-                runCatching {
-                    val review = googleGeminiClient.chat(filePath, task.prompt)
-
-                    if (review != null) {
-                        githubReviewClient.addReviewComment(original.toGithubReviewDto(review))
-                        logger.info(
-                            "[Retry Success] file={}, retry={}, promptLength={}",
-                            filePath, retryCount, promptLength
-                        )
-                    } else {
-                        failedTaskManager.add(original, task.prompt, retryCount + 1)
-                        logger.warn(
-                            "[Retry Skipped] file={}, retry={}, promptLength={}",
-                            filePath, retryCount, promptLength
-                        )
+                when (val outcome = executor.execute(cmd)) {
+                    is ReviewOutcome.Success -> {
+                        logger.info("[Retry Success] file={}, retry={}", original.diff.path, retryCount)
                     }
-                }.onFailure { e ->
-                    failedTaskManager.add(original, task.prompt, retryCount + 1)
-                    logger.error(
-                        "[Retry Failed] file={}, retry={}, promptLength={}",
-                        filePath, retryCount, promptLength, e
-                    )
+                    is ReviewOutcome.Retryable -> {
+                        val next = computeBackoffMillis(retryCount)
+                        failedTaskManager.add(original, outcome.promptUsed, retryCount + 1)
+                        logger.warn("[Retry Requeued] file={}, retry={}, next={}ms, reason={}",
+                            original.diff.path, retryCount + 1, next, outcome.reason)
+                    }
+                    is ReviewOutcome.NonRetryable -> {
+                        logger.error("[Retry Aborted] file={}, retry={}, reason={}",
+                            original.diff.path, retryCount, outcome.reason)
+                    }
                 }
             }
 
             logger.info("[Retry End] processed = {}", batch.size)
         }
+    }
+
+    private fun computeBackoffMillis(retryCount: Int): Long {
+        val base = 5_000L // 5초
+        val maxCap = 10 * 60_000L // 10분
+        val exp = base shl retryCount
+        val jitter = Random.nextLong(0, base)
+        return min(exp + jitter, maxCap)
     }
 }
