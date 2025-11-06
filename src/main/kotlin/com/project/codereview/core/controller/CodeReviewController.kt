@@ -28,15 +28,20 @@ class CodeReviewController(
     ): ResponseEntity<String> {
         if (sig256 == null) {
             logger.warn("Missing signature header for GitHub webhook")
-            return unauthorized("Missing signature")
+            return fail("Missing signature")
         }
         // 서명 검증
         if (!GithubSignature.isValid(sig256, secret, rawBody)) {
             logger.warn("Invalid signature detected from GitHub webhook")
-            return unauthorized("Invalid signature")
+            return fail("Invalid signature")
         }
 
-        val payload = parsePayload(rawBody)
+        val payload = try {
+            parsePayload(rawBody)
+        } catch (e: Exception) {
+            return fail("Invalid payload : ${e.message}", HttpStatus.NOT_ACCEPTABLE)
+        }
+
         val action = GithubActionType(payload.action)
         logger.info("payload = {}, action = {}", payload, action)
 
@@ -55,7 +60,8 @@ class CodeReviewController(
         return ResponseEntity.ok("Request completed")
     }
 
-    private fun unauthorized(
-        message: String
-    ) = ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(message)
+    private fun fail(
+        message: String,
+        status: HttpStatus = HttpStatus.UNAUTHORIZED
+    ) = ResponseEntity.status(status).body(message)
 }
