@@ -1,52 +1,35 @@
 package com.project.codereview.core.service
 
 import com.project.codereview.batch.FailedTaskManager
-import com.project.codereview.client.github.GithubReviewClient
-import com.project.codereview.client.google.GoogleGeminiClient
+import com.project.codereview.client.github.GithubDiffUtils
 import com.project.codereview.core.dto.GithubPayload
-import com.project.codereview.core.dto.GithubReviewDto
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
 @Service
 class ReviewWorker(
-    private val googleGeminiClient: GoogleGeminiClient,
-    private val githubReviewClient: GithubReviewClient,
+    private val executor: ReviewExecutor,
     private val failedTaskManager: FailedTaskManager
 ) {
     private val logger = LoggerFactory.getLogger(ReviewWorker::class.java)
 
-    suspend fun process(payload: GithubPayload, task: DiffTaskPreparer.ReviewTask) {
-        val prompt = "```diff\n${task.part.content}\n```"
-        val filePath = task.part.filePath
+    suspend fun process(payload: GithubPayload, task: CodeReviewService.ReviewTask) {
+        val cmd = ReviewCommand(payload = payload, diff = task.diff)
 
-        val reviewResult = runCatching {
-            googleGeminiClient.chat(filePath, prompt)
-        }.onFailure { e ->
-            logger.warn("[Gemini error] - $payload, $task")
-            logger.warn("[Gemini error] - {}", e.message)
-            handleGeminiError(e.message ?: "", prompt, payload, task)
-        }
-
-        val review = reviewResult.getOrNull() ?: return
-
-        runCatching {
-            githubReviewClient.addReviewComment(GithubReviewDto(task.payload, task.part, payload.installation.id, review))
-        }.onFailure { e ->
-            logger.warn("[Github error] - $payload, $task")
-            logger.warn("[Github error] - cause {}", e.message)
-        }
-    }
-
-    private fun handleGeminiError(
-        e: String,
-        prompt: String,
-        payload: GithubPayload,
-        task: DiffTaskPreparer.ReviewTask
-    ) {
-        val isTooManyRequestError = e.contains("429 Too Many Requests") || e.contains("429")
-        if (isTooManyRequestError) {
-            failedTaskManager.add(FailedTaskManager.OriginalTask(payload, task.part), prompt)
+        when (val outcome = executor.execute(cmd)) {
+            is ReviewOutcome.Success -> {
+                logger.info("[Review Success] {}", task.diff.path)
+            }
+            is ReviewOutcome.Retryable -> {
+                failedTaskManager.add(
+                    FailedTaskManager.OriginalTask(payload, task.diff),
+                    outcome.promptUsed
+                )
+                logger.warn("[Review Retryable] file={}, reason={}", task.diff.path, outcome.reason)
+            }
+            is ReviewOutcome.NonRetryable -> {
+                logger.error("[Review NonRetryable] file={}, reason={}", task.diff.path, outcome.reason)
+            }
         }
     }
 }
