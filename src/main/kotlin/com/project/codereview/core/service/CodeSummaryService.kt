@@ -1,7 +1,8 @@
 package com.project.codereview.core.service
 
-import com.project.codereview.client.github.GithubDiffUtils
 import com.project.codereview.client.github.GithubReviewClient
+import com.project.codereview.client.github.dto.ReviewContext
+import com.project.codereview.client.github.dto.ReviewType
 import com.project.codereview.client.google.GoogleGeminiClient
 import com.project.codereview.client.util.SUMMARY_PROMPT
 import com.project.codereview.core.dto.GithubPayload
@@ -17,22 +18,12 @@ class CodeSummaryService(
 
     suspend fun summary(
         payload: GithubPayload,
-        fileContexts: List<GithubDiffUtils.FileContext>
+        fileContexts: List<ReviewContext>
     ) {
         logger.info("[Summary] Making summary ...")
 
         val content = googleGeminiClient.getContent(SUMMARY_PROMPT)
-        val prompt = "\n${fileContexts.joinToString("\n") { """
-            ## Info
-            
-            > Path : ${it.path}
-            
-            ### File diff
-            
-            ```diff
-            ${it.originSnippet}
-            ```
-        """.trimIndent() }}"
+        val prompt = fileContexts.buildPrompt()
 
         val summary = googleGeminiClient.chat(payload.toString(), prompt, content)
 
@@ -40,7 +31,7 @@ class CodeSummaryService(
             logger.info("[Summary] Success to make summary and request review")
             runCatching {
                 githubReviewClient.addReviewSummaryComment(
-                    payload.pull_request, payload.installation.id, payload.pull_request.head.sha, summary
+                    ReviewContext(summary, payload, ReviewType.ByComment())
                 )
             }.onFailure {
                 logger.warn("[Summary] Fail to request review")
@@ -51,4 +42,22 @@ class CodeSummaryService(
             logger.warn("[Summary] Fail to make summary")
         }
     }
+}
+
+private fun List<ReviewContext>.buildPrompt() = filter {
+    it.type.path().isNotBlank()
+}.joinToString("\n") {
+"""
+## Info
+
+> Path : ${it.type.path()}
+
+### File diff
+
+```diff
+${it.body}
+```
+
+---
+""".trimIndent()
 }
