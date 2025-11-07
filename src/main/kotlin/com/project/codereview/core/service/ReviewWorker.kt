@@ -14,7 +14,7 @@ class ReviewWorker(
     private val logger = LoggerFactory.getLogger(ReviewWorker::class.java)
 
     suspend fun process(payload: GithubPayload, task: CodeReviewService.ReviewTask) {
-        val cmd = ReviewCommand(payload = payload, diff = task.diff)
+        val cmd = ReviewCommand(payload = payload, diff = task.diff, buildPrompt(task.originSnippet, task.diff.snippet))
 
         when (val outcome = executor.execute(cmd)) {
             is ReviewOutcome.Success -> {
@@ -33,3 +33,17 @@ class ReviewWorker(
         }
     }
 }
+
+private fun buildPrompt(originSnippet: String, snippet: String) = """
+## 파일 전체
+
+```diff
+${originSnippet.trimIndent()}
+```
+
+## 리뷰 대상 Hunk
+
+```diff
+${snippet.trimIndent()}
+```
+""".trimIndent()
