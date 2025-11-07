@@ -19,10 +19,14 @@ sealed class ReviewType {
     data class ByComment(
         val event: String = "COMMENT",
     ) : ReviewType() {
-        override fun toMap(
+        override fun toPayloadMap(
             body: String,
             commitId: String
-        ): Map<String, String> = mapOf()
+        ): Map<String, String> = mapOf(
+            "event" to "COMMENT",
+            "commit_id" to commitId,
+            "body" to body
+        )
     }
 
     data class ByMultiline(
@@ -32,7 +36,7 @@ sealed class ReviewType {
         val start_line: Int,
         val start_side: String,
     ) : ReviewType() {
-        override fun toMap(
+        override fun toPayloadMap(
             body: String,
             commitId: String
         ) = mapOf(
@@ -49,7 +53,7 @@ sealed class ReviewType {
     data class ByFile(
         val path: String,
     ) : ReviewType() {
-        override fun toMap(
+        override fun toPayloadMap(
             body: String,
             commitId: String
         ): Map<String, String> = mapOf(
@@ -60,7 +64,7 @@ sealed class ReviewType {
         )
     }
 
-    abstract fun toMap(
+    abstract fun toPayloadMap(
         body: String,
         commitId: String
     ): Map<String, String>

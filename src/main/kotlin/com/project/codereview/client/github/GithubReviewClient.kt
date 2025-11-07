@@ -19,11 +19,7 @@ class GithubReviewClient(
         val uri = ctx.run {
             "/repos/$owner/$repo/pulls/$prNumber/reviews"
         }
-        val payload = mutableMapOf(
-            "event" to "COMMENT",
-            "commit_id" to ctx.commitId,
-            "body" to ctx.body
-        )
+        val payload = ctx.type.toPayloadMap(ctx.body, ctx.commitId)
 
         val token = tokenProvider.getInstallationToken(ctx.installationId)
 
@@ -48,7 +44,7 @@ class GithubReviewClient(
             .headers {
                 it.setBearerAuth(tokenProvider.getInstallationToken(ctx.installationId))
             }
-            .bodyValue(ctx.type.toMap(ctx.body, ctx.installationId))
+            .bodyValue(ctx.type.toPayloadMap(ctx.body, ctx.installationId))
             .retrieve()
             .bodyToMono(String::class.java)
             .block()
