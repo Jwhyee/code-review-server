@@ -23,6 +23,7 @@ class CodeReviewService(
     data class ReviewTask(
         val payload: PullRequestPayload,
         val diff: GithubDiffUtils.DiffInfo,
+        val originSnippet: String,
         val priority: Int
     ) : Comparable<ReviewTask> {
         override fun compareTo(
@@ -41,8 +42,11 @@ class CodeReviewService(
         val fileContexts = GithubDiffUtils.buildFileContexts(diff)
         fileContexts.forEach { context ->
             context.diffs.forEach { diff ->
-                val priority = diff.snippet.length
-                queue.put(ReviewTask(pr, diff, priority))
+                val priority = diff.snippet.trim().length
+
+                if (priority > 30) {
+                    queue.put(ReviewTask(pr, diff, context.originSnippet, priority))
+                }
             }
         }
 
