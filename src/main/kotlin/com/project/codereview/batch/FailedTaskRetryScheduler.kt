@@ -58,7 +58,7 @@ class FailedTaskRetryScheduler(
                 }
             }
 
-            logger.info("[Retry End] processed = {}", batch.size)
+            logger.info("[Retry End] processed count = {}, Remaining whole process count = {}", batch.size, failedTaskManager.size())
         }
     }
 
