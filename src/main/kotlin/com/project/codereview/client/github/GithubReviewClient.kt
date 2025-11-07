@@ -20,7 +20,6 @@ class GithubReviewClient(
             "/repos/$owner/$repo/pulls/$prNumber/reviews"
         }
         val payload = ctx.type.toPayloadMap(ctx.body, ctx.commitId)
-
         val token = tokenProvider.getInstallationToken(ctx.installationId)
 
         client.post()
@@ -33,18 +32,19 @@ class GithubReviewClient(
     }
 
     suspend fun addReviewComment(
-        ctx: ReviewContext
+        ctx: ReviewContext,
+        review: String
     ) {
         val uri = ctx.run {
             "/repos/$owner/$repo/pulls/$prNumber/comments"
         }
+        val token = tokenProvider.getInstallationToken(ctx.installationId)
+        val payload = ctx.type.toPayloadMap(review, ctx.commitId)
 
         client.post()
             .uri(uri)
-            .headers {
-                it.setBearerAuth(tokenProvider.getInstallationToken(ctx.installationId))
-            }
-            .bodyValue(ctx.type.toPayloadMap(ctx.body, ctx.installationId))
+            .headers { it.setBearerAuth(token) }
+            .bodyValue(payload)
             .retrieve()
             .bodyToMono(String::class.java)
             .block()

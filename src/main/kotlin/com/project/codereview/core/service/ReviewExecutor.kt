@@ -51,9 +51,11 @@ class ReviewExecutor(
 
         return try {
             if (!review.contains(REJECT_REVIEW)) {
-                githubReviewClient.addReviewComment(cmd.reviewContext)
+                githubReviewClient.addReviewComment(cmd.reviewContext, review)
+                ReviewOutcome.Success()
+            } else {
+                ReviewOutcome.NonRetryable("Review rejected")
             }
-            ReviewOutcome.Success()
         } catch (t: Throwable) {
             classifyAsOutcome(t, prompt)
         }
