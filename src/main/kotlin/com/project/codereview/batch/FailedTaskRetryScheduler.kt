@@ -32,33 +32,38 @@ class FailedTaskRetryScheduler(
                 val retryCount = task.retryCount
                 val cmd = ReviewCommand(
                     payload = original.payload,
-                    diff = original.diff,
+                    reviewContext = original.reviewContext,
                     promptOverride = task.prompt // 재시도는 기존 프롬프트 유지
                 )
 
+                val path = original.reviewContext.type.path()
+                if (path.isBlank()) {
+                    // path가 빈 경우는 Summary 뿐임
+                    logger.warn("[Retry Aborted] File path is empty")
+                    return@forEach
+                }
+
                 if (retryCount >= maxRetry) {
-                    logger.error("[Give Up] file={} after {} retries", original.diff.path, retryCount)
+                    logger.error("[Give Up] file={} after {} retries", path, retryCount)
                     return@forEach
                 }
 
                 when (val outcome = executor.execute(cmd)) {
                     is ReviewOutcome.Success -> {
-                        logger.info("[Retry Success] file={}, retry={}", original.diff.path, retryCount)
+                        logger.info("[Retry Success] file={}, retry={}", path, retryCount)
                     }
                     is ReviewOutcome.Retryable -> {
                         val next = computeBackoffMillis(retryCount)
                         failedTaskManager.add(original, outcome.promptUsed, retryCount + 1)
-                        logger.warn("[Retry Requeued] file={}, retry={}, next={}ms, reason={}",
-                            original.diff.path, retryCount + 1, next, outcome.reason)
+                        logger.warn("[Retry Requeued] file={}, retry={}, next={}ms, reason={}", path, retryCount + 1, next, outcome.reason)
                     }
                     is ReviewOutcome.NonRetryable -> {
-                        logger.error("[Retry Aborted] file={}, retry={}, reason={}",
-                            original.diff.path, retryCount, outcome.reason)
+                        logger.error("[Retry Aborted] file={}, retry={}, reason={}", path, retryCount, outcome.reason)
                     }
                 }
             }
 
-            logger.info("[Retry End] processed = {}", batch.size)
+            logger.info("[Retry End] processed count = {}, Remaining whole process count = {}", batch.size, failedTaskManager.size())
         }
     }
 

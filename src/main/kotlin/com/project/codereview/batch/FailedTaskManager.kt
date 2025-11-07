@@ -1,8 +1,7 @@
 package com.project.codereview.batch
 
-import com.project.codereview.client.github.GithubDiffUtils
+import com.project.codereview.client.github.dto.ReviewContext
 import com.project.codereview.core.dto.GithubPayload
-import com.project.codereview.core.dto.GithubReviewDto
 import org.springframework.stereotype.Component
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
@@ -11,12 +10,8 @@ import java.util.concurrent.atomic.AtomicInteger
 class FailedTaskManager {
     data class OriginalTask(
         val payload: GithubPayload,
-        val diff: GithubDiffUtils.DiffInfo
-    ) {
-        fun toGithubReviewDto(review: String): GithubReviewDto {
-            return GithubReviewDto(payload.pull_request, diff, payload.installation.id, review)
-        }
-    }
+        val reviewContext: ReviewContext
+    )
 
     data class FailedTask(
         val task: OriginalTask,

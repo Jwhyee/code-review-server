@@ -2,6 +2,7 @@ package com.project.codereview.core.service
 
 import com.project.codereview.client.github.GithubDiffClient
 import com.project.codereview.client.github.GithubDiffUtils
+import com.project.codereview.client.github.dto.ReviewContext
 import com.project.codereview.core.dto.GithubPayload
 import com.project.codereview.core.dto.PullRequestPayload
 import kotlinx.coroutines.Dispatchers
@@ -22,7 +23,8 @@ class CodeReviewService(
 ) {
     data class ReviewTask(
         val payload: PullRequestPayload,
-        val diff: GithubDiffUtils.DiffInfo,
+        val reviewContext: ReviewContext,
+        val originSnippet: String,
         val priority: Int
     ) : Comparable<ReviewTask> {
         override fun compareTo(
@@ -38,11 +40,11 @@ class CodeReviewService(
         val pr = payload.pull_request
         val diff = githubDiffClient.getPrDiff(pr.owner, pr.repo, pr.prNumber)
 
-        val fileContexts = GithubDiffUtils.buildFileContexts(diff)
+        val fileContexts = GithubDiffUtils.buildReviewContextsByFile(diff, payload)
         fileContexts.forEach { context ->
-            context.diffs.forEach { diff ->
-                val priority = diff.snippet.length
-                queue.put(ReviewTask(pr, diff, priority))
+            val priority = context.body.length
+            if (priority > 30) {
+                queue.put(ReviewTask(pr, context, context.body, priority))
             }
         }
 

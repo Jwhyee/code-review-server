@@ -3,22 +3,21 @@ package com.project.codereview.core.service
 import com.project.codereview.client.github.GithubReviewClient
 import com.project.codereview.client.google.GoogleGeminiClient
 import com.project.codereview.core.dto.GithubPayload
-import com.project.codereview.core.dto.GithubReviewDto
-import com.project.codereview.client.github.GithubDiffUtils
+import com.project.codereview.client.github.dto.ReviewContext
 import com.project.codereview.client.util.REJECT_REVIEW
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
 data class ReviewCommand(
     val payload: GithubPayload,
-    val diff: GithubDiffUtils.DiffInfo,
+    val reviewContext: ReviewContext,
     val promptOverride: String? = null // 재시도 시 기존 프롬프트를 그대로 쓰고 싶을 때
 )
 
 sealed interface ReviewOutcome {
-    data class Success(val commentPosted: Boolean = true): ReviewOutcome
-    data class Retryable(val promptUsed: String, val reason: String): ReviewOutcome
-    data class NonRetryable(val reason: String): ReviewOutcome
+    data class Success(val commentPosted: Boolean = true) : ReviewOutcome
+    data class Retryable(val promptUsed: String, val reason: String) : ReviewOutcome
+    data class NonRetryable(val reason: String) : ReviewOutcome
 }
 
 /**
@@ -33,11 +32,15 @@ class ReviewExecutor(
     private val log = LoggerFactory.getLogger(ReviewExecutor::class.java)
 
     suspend fun execute(cmd: ReviewCommand): ReviewOutcome {
-        val prompt = cmd.promptOverride ?: buildPrompt(cmd.diff.snippet)
-        val filePath = cmd.diff.path
+        val prompt = cmd.promptOverride ?: buildPrompt(cmd.reviewContext.body)
+
+        val path = cmd.reviewContext.type.path()
+        if (path.isBlank()) {
+            return ReviewOutcome.NonRetryable("Empty file path")
+        }
 
         val review = try {
-            googleGeminiClient.chat(filePath, prompt)
+            googleGeminiClient.chat(path, prompt)
         } catch (t: Throwable) {
             return classifyAsOutcome(t, prompt)
         }
@@ -48,14 +51,7 @@ class ReviewExecutor(
 
         return try {
             if (!review.contains(REJECT_REVIEW)) {
-                githubReviewClient.addReviewComment(
-                    GithubReviewDto(
-                        cmd.payload.pull_request,
-                        cmd.diff,
-                        cmd.payload.installation.id,
-                        review
-                    )
-                )
+                githubReviewClient.addReviewComment(cmd.reviewContext)
             }
             ReviewOutcome.Success()
         } catch (t: Throwable) {
@@ -88,8 +84,8 @@ class ReviewExecutor(
 
         return when {
             nonRetryable -> ReviewOutcome.NonRetryable(msg)
-            retryable    -> ReviewOutcome.Retryable(promptUsed, msg)
-            else         -> ReviewOutcome.Retryable(promptUsed, msg) // 보수적으로 재시도
+            retryable -> ReviewOutcome.Retryable(promptUsed, msg)
+            else -> ReviewOutcome.Retryable(promptUsed, msg) // 보수적으로 재시도
         }
     }
 }

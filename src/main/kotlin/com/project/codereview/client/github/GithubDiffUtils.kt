@@ -1,28 +1,30 @@
 package com.project.codereview.client.github
 
+import com.project.codereview.client.github.dto.ReviewContext
+import com.project.codereview.client.github.dto.ReviewType
+import com.project.codereview.core.dto.GithubPayload
+
 object GithubDiffUtils {
 
+    // 멀티라인 앵커 정보
     data class DiffInfo(
         val path: String,
         val startLine: Int,
         val endLine: Int,
-        val side: String,
+        val side: String,      // "RIGHT" | "LEFT"
         val snippet: String
     ) {
-        fun toGithubReviewRequest(
-            commitId: String,
-            body: String
-        ) = GithubReviewClient.ReviewCommentRequest(
-            body = body,
-            path = path,
-            commit_id = commitId,
-            start_line = startLine,
-            start_side = side,
-            line = endLine,
-            side = side
-        )
+        fun toReviewType(): ReviewType.ByMultiline =
+            ReviewType.ByMultiline(
+                path = path,
+                line = endLine,
+                side = side,
+                start_line = startLine,
+                start_side = side
+            )
     }
 
+    // 파일 단위 컨텍스트(파일별로 묶기)
     data class FileContext(
         val path: String,
         val originSnippet: String,
@@ -35,6 +37,7 @@ object GithubDiffUtils {
 
     private fun isImportLineInDiff(line: String): Boolean = importLineRegex.containsMatchIn(line)
 
+    // hunk 파싱 → 멀티라인 범위(DiffInfo) 추출
     private fun buildRequests(diffText: String): List<DiffInfo> {
         val text = diffText.replace("\r\n", "\n")
         val lines = text.lineSequence().toList()
@@ -143,7 +146,7 @@ object GithubDiffUtils {
                 }
 
                 inHunk && currentPath != null -> {
-                    if (raw.isEmpty()) return@forEach
+                    if (raw.isBlank()) return@forEach
                     when (raw[0]) {
                         ' ' -> {
                             if (collectingRight) {
@@ -185,6 +188,7 @@ object GithubDiffUtils {
         return ranges
     }
 
+    // 파일별 원본 스니펫 생성(선택적 import 필터링)
     private fun buildOrigins(
         diffText: String,
         filterImportsInOrigin: Boolean = false
@@ -215,18 +219,13 @@ object GithubDiffUtils {
                 }
 
                 inHunk && currentPath != null -> {
-                    if (raw.isEmpty()) return@forEach
-                    // origin은 + / - 만 수집 (원하면 ' '도 포함 가능)
+                    if (raw.isBlank()) return@forEach
                     if (raw[0] == '+' || raw[0] == '-') {
                         if (!filterImportsInOrigin || !isImportLineInDiff(raw)) {
                             originByFile[currentPath]!!.add(raw)
                         }
                     }
-                    if (raw.startsWith("diff --git ") || raw.startsWith("index ") || raw.startsWith("--- ") || raw.startsWith(
-                            "+++ "
-                        )
-                    ) {
-                        // 안전장치: 예외적 케이스 방지
+                    if (raw.startsWith("diff --git ") || raw.startsWith("index ") || raw.startsWith("--- ") || raw.startsWith("+++ ")) {
                         inHunk = false
                     }
                 }
@@ -238,13 +237,13 @@ object GithubDiffUtils {
         return originByFile.mapValues { (_, v) -> v.joinToString("\n") }
     }
 
-    fun buildFileContexts(
+    // 내부 공통: 파일 컨텍스트 구성
+    private fun buildFileContextsInternal(
         diffText: String,
-        filterImportsInOrigin: Boolean = false
+        filterImportsInOrigin: Boolean
     ): List<FileContext> {
         val diffs = buildRequests(diffText)
         val originMap = buildOrigins(diffText, filterImportsInOrigin)
-
         return diffs.groupBy { it.path }
             .map { (path, list) ->
                 FileContext(
@@ -253,5 +252,37 @@ object GithubDiffUtils {
                     diffs = list
                 )
             }
+    }
+
+    fun buildReviewContextsByMultiline(
+        diffText: String,
+        payload: GithubPayload,
+        filterImportsInOrigin: Boolean = true,
+    ): List<ReviewContext> {
+        val fileContexts = buildFileContextsInternal(diffText, filterImportsInOrigin)
+        return fileContexts.flatMap { file ->
+            file.diffs.map { d ->
+                ReviewContext(
+                    body = d.snippet,
+                    payload = payload,
+                    type = d.toReviewType()
+                )
+            }
+        }
+    }
+
+    fun buildReviewContextsByFile(
+        diffText: String,
+        payload: GithubPayload,
+        filterImportsInOrigin: Boolean = false,
+    ): List<ReviewContext> {
+        val fileContexts = buildFileContextsInternal(diffText, filterImportsInOrigin)
+        return fileContexts.map { file ->
+            ReviewContext(
+                body = file.originSnippet,
+                payload = payload,
+                type = ReviewType.ByFile(path = file.path)
+            )
+        }
     }
 }
