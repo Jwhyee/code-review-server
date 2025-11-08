@@ -32,7 +32,7 @@ class ReviewExecutor(
     private val githubReviewClient: GithubReviewClient,
     private val geminiModelStateManager: GeminiModelStateManager
 ) {
-    private val log = LoggerFactory.getLogger(ReviewExecutor::class.java)
+    private val logger = LoggerFactory.getLogger(ReviewExecutor::class.java)
 
     suspend fun execute(cmd: ReviewCommand): ReviewOutcome {
         val prompt = cmd.promptOverride ?: buildPrompt(cmd.reviewContext.body)
@@ -43,7 +43,7 @@ class ReviewExecutor(
         val model = geminiModelStateManager.getAvailableModel()
             ?: return ReviewOutcome.Retryable(prompt, "No available Gemini models")
 
-        log.info("[Using Model] {}", model.modelName)
+        logger.info("[Using Model] {}", model.modelName)
 
         val review = try {
             googleGeminiClient.chat(path, prompt, model)
@@ -77,6 +77,7 @@ class ReviewExecutor(
             msg.contains("limit:", ignoreCase = true) ||
             msg.contains("not supported by this model", ignoreCase = true)
         ) {
+            logger.warn("[Gemini] Chat failed cause : ${t.message}")
             geminiModelStateManager.blockModel(model)
             return ReviewOutcome.Retryable(promptUsed, "Model ${model.modelName} blocked due to rate limit")
         }
