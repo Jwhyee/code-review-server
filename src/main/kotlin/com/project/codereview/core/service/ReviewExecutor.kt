@@ -4,7 +4,9 @@ import com.project.codereview.client.github.GithubReviewClient
 import com.project.codereview.client.google.GoogleGeminiClient
 import com.project.codereview.core.dto.GithubPayload
 import com.project.codereview.client.github.dto.ReviewContext
+import com.project.codereview.client.util.GeminiTextModel
 import com.project.codereview.client.util.REJECT_REVIEW
+import com.project.codereview.core.repository.GeminiModelStateManager
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
@@ -27,7 +29,8 @@ sealed interface ReviewOutcome {
 @Service
 class ReviewExecutor(
     private val googleGeminiClient: GoogleGeminiClient,
-    private val githubReviewClient: GithubReviewClient
+    private val githubReviewClient: GithubReviewClient,
+    private val geminiModelStateManager: GeminiModelStateManager
 ) {
     private val log = LoggerFactory.getLogger(ReviewExecutor::class.java)
 
@@ -35,14 +38,17 @@ class ReviewExecutor(
         val prompt = cmd.promptOverride ?: buildPrompt(cmd.reviewContext.body)
 
         val path = cmd.reviewContext.type.path()
-        if (path.isBlank()) {
-            return ReviewOutcome.NonRetryable("Empty file path")
-        }
+        if (path.isBlank()) return ReviewOutcome.NonRetryable("Empty file path")
+
+        val model = geminiModelStateManager.getAvailableModel()
+            ?: return ReviewOutcome.Retryable(prompt, "No available Gemini models")
+
+        log.info("[Using Model] {}", model.modelName)
 
         val review = try {
-            googleGeminiClient.chat(path, prompt)
+            googleGeminiClient.chat(path, prompt, model)
         } catch (t: Throwable) {
-            return classifyAsOutcome(t, prompt)
+            return handleModelError(model, t, prompt)
         }
 
         if (review.isNullOrBlank()) {
@@ -64,30 +70,36 @@ class ReviewExecutor(
     private fun buildPrompt(snippet: String) =
         "```diff\n$snippet\n```"
 
-    private fun classifyAsOutcome(t: Throwable, promptUsed: String): ReviewOutcome {
+    private fun handleModelError(model: GeminiTextModel, t: Throwable, promptUsed: String): ReviewOutcome {
         val msg = t.message ?: t::class.java.simpleName
 
-        // 재시도 가치가 있는 조건들
+        if (msg.contains("limit:", ignoreCase = true)) {
+            geminiModelStateManager.blockModel(model)
+            return ReviewOutcome.Retryable(promptUsed, "Model ${model.modelName} blocked due to rate limit")
+        }
+
+        return classifyAsOutcome(t, promptUsed)
+    }
+
+    private fun classifyAsOutcome(t: Throwable, promptUsed: String): ReviewOutcome {
+        val msg = t.message ?: t::class.java.simpleName
         val retryable =
             msg.contains("429") ||
                     msg.contains("Too Many Requests", ignoreCase = true) ||
                     msg.contains("503") ||
                     msg.contains("Service Unavailable", ignoreCase = true) ||
-                    msg.contains("timeout", ignoreCase = true) ||
-                    msg.contains("timed out", ignoreCase = true)
+                    msg.contains("timeout", ignoreCase = true)
 
-        // 재시도해도 의미 없을 가능성이 큰 조건들 (예: 4xx 검증 실패)
         val nonRetryable =
             msg.contains("422") ||
                     msg.contains("validation", ignoreCase = true) ||
-                    msg.contains("commit", ignoreCase = true) && msg.contains("sha", ignoreCase = true) ||
                     msg.contains("403") ||
                     msg.contains("Not Found", ignoreCase = true)
 
         return when {
             nonRetryable -> ReviewOutcome.NonRetryable(msg)
             retryable -> ReviewOutcome.Retryable(promptUsed, msg)
-            else -> ReviewOutcome.Retryable(promptUsed, msg) // 보수적으로 재시도
+            else -> ReviewOutcome.Retryable(promptUsed, msg)
         }
     }
 }
