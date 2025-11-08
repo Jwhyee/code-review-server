@@ -57,7 +57,11 @@ class GoogleGeminiClient(
                 prompt,
                 GenerateContentConfig.builder()
                     .systemInstruction(instruction)
-                    .thinkingConfig(think)
+                    .apply {
+                        if(model.thinkable) {
+                            thinkingConfig(think)
+                        }
+                    }
                     .build()
             ).use { stream ->
                 buildString {

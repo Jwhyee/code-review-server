@@ -73,7 +73,10 @@ class ReviewExecutor(
     private fun handleModelError(model: GeminiTextModel, t: Throwable, promptUsed: String): ReviewOutcome {
         val msg = t.message ?: t::class.java.simpleName
 
-        if (msg.contains("limit:", ignoreCase = true)) {
+        if (
+            msg.contains("limit:", ignoreCase = true) ||
+            msg.contains("not supported by this model", ignoreCase = true)
+        ) {
             geminiModelStateManager.blockModel(model)
             return ReviewOutcome.Retryable(promptUsed, "Model ${model.modelName} blocked due to rate limit")
         }
