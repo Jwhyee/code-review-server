@@ -4,6 +4,7 @@ import com.project.codereview.client.github.GithubReviewClient
 import com.project.codereview.client.github.dto.ReviewContext
 import com.project.codereview.client.github.dto.ReviewType
 import com.project.codereview.client.google.GoogleGeminiClient
+import com.project.codereview.client.util.GeminiTextModel
 import com.project.codereview.client.util.SUMMARY_PROMPT
 import com.project.codereview.core.dto.GithubPayload
 import org.slf4j.LoggerFactory
@@ -25,7 +26,7 @@ class CodeSummaryService(
         val content = googleGeminiClient.getContent(SUMMARY_PROMPT)
         val prompt = fileContexts.buildPrompt()
 
-        val summary = googleGeminiClient.chat(payload.toString(), prompt, content)
+        val summary = googleGeminiClient.chat(payload.toString(), prompt, GeminiTextModel.GEMINI_2_5_FLASH_LITE, content)
 
         if (summary != null && summary.isNotBlank()) {
             logger.info("[Summary] Success to make summary and request review")

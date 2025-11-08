@@ -1,11 +1,8 @@
 package com.project.codereview.client.google
 
 import com.google.genai.Client
-import com.google.genai.types.Content
-import com.google.genai.types.GenerateContentConfig
-import com.google.genai.types.Part
-import com.google.genai.types.ThinkingConfig
-import com.project.codereview.client.util.MODEL
+import com.google.genai.types.*
+import com.project.codereview.client.util.GeminiTextModel
 import com.project.codereview.client.util.ReviewLanguage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -13,6 +10,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.jvm.optionals.getOrNull
 
 @Component
 class GoogleGeminiClient(
@@ -46,6 +44,7 @@ class GoogleGeminiClient(
     suspend fun chat(
         filePath: String,
         prompt: String,
+        model: GeminiTextModel,
         instruction: Content = ReviewLanguage.fromExtension(filePath).let { language ->
             instructionMap[language] ?: instructionMap[ReviewLanguage.KT]!!
         },
@@ -54,7 +53,7 @@ class GoogleGeminiClient(
         try {
             logger.info("[Gemini] request started = {}", filePath)
             client.models.generateContentStream(
-                MODEL,
+                model.modelName,
                 prompt,
                 GenerateContentConfig.builder()
                     .systemInstruction(instruction)

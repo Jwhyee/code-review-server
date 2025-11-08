@@ -1,8 +1,7 @@
 package com.project.codereview.core.controller
 
-import com.project.codereview.core.dto.GithubActionType
 import com.project.codereview.core.dto.parsePayload
-import com.project.codereview.core.service.CodeReviewService
+import com.project.codereview.core.service.PullRequestEventEntry
 import com.project.codereview.core.util.GithubSignature
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -16,52 +15,32 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 class CodeReviewController(
     @param:Value("\${app.github.webhook.secret-key}") private val secret: String,
-    private val codeReviewService: CodeReviewService
+    private val entry: PullRequestEventEntry
 ) {
-    private val logger = LoggerFactory.getLogger(CodeReviewController::class.java)
+    private val log = LoggerFactory.getLogger(CodeReviewController::class.java)
 
     @PostMapping("/api/code/review")
-    suspend fun net(
+    suspend fun handleWebhook(
         @RequestHeader("X-GitHub-Event") event: String,
         @RequestHeader("X-Hub-Signature-256", required = false) sig256: String?,
         @RequestBody rawBody: ByteArray
     ): ResponseEntity<String> {
-        if (sig256 == null) {
-            logger.warn("Missing signature header for GitHub webhook")
-            return fail("Missing signature")
-        }
-        // 서명 검증
-        if (!GithubSignature.isValid(sig256, secret, rawBody)) {
-            logger.warn("Invalid signature detected from GitHub webhook")
-            return fail("Invalid signature")
-        }
+        if (sig256.isNullOrBlank()) return fail("Missing signature")
+        if (!GithubSignature.isValid(sig256, secret, rawBody)) return fail("Invalid signature")
 
         val payload = try {
             parsePayload(rawBody)
         } catch (e: Exception) {
-            return fail("Invalid payload : ${e.message}", HttpStatus.NOT_ACCEPTABLE)
+            return fail("Invalid payload: ${e.message}", HttpStatus.NOT_ACCEPTABLE)
         }
 
-        val action = GithubActionType(payload.action)
-        logger.info("payload = {}, action = {}", payload, action)
+        entry.handle(event, payload)
 
-        // PR 생성 시에만 리뷰 진행
-        when (event) {
-            "pull_request" -> when (GithubActionType(payload.action)) {
-                GithubActionType.OPENED,
-                GithubActionType.REOPENED -> {
-                    codeReviewService.review(payload)
-                }
-                else -> logger.info("Ignored pull_request event: ${payload.action}")
-            }
-            else -> logger.debug("Unhandled GitHub event: $event")
-        }
-
-        return ResponseEntity.ok("Request completed")
+        return ResponseEntity.ok("Accepted")
     }
 
-    private fun fail(
-        message: String,
-        status: HttpStatus = HttpStatus.UNAUTHORIZED
-    ) = ResponseEntity.status(status).body(message)
+    private fun fail(message: String, status: HttpStatus = HttpStatus.UNAUTHORIZED): ResponseEntity<String> {
+        log.error("[Api request fail] reason = {}", message)
+        return ResponseEntity.status(status).body(message)
+    }
 }
