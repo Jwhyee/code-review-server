@@ -4,6 +4,9 @@ import com.project.codereview.client.github.GithubDiffClient
 import com.project.codereview.client.github.GithubDiffUtils
 import com.project.codereview.core.dto.GithubActionType
 import com.project.codereview.core.dto.GithubPayload
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
@@ -26,15 +29,17 @@ class PullRequestEventEntry(
         val diff = githubDiffClient.getPrDiff(pr.owner, pr.repo, pr.prNumber)
         val contexts = GithubDiffUtils.buildReviewContextsByFile(diff, payload)
 
-        when (action) {
-            GithubActionType.OPENED -> {
-                codeSummaryService.summary(payload, contexts)
-                codeReviewService.review(payload, contexts)
+        CoroutineScope(Dispatchers.IO).launch {
+            when (action) {
+                GithubActionType.OPENED -> {
+                    codeSummaryService.summary(payload, contexts)
+                    codeReviewService.review(payload, contexts)
+                }
+                GithubActionType.REOPENED -> {
+                    codeReviewService.review(payload, contexts, false)
+                }
+                else -> logger.info("Ignored action: {}", action)
             }
-            GithubActionType.REOPENED -> {
-                codeReviewService.review(payload, contexts)
-            }
-            else -> logger.info("Ignored action: {}", action)
         }
     }
 }
