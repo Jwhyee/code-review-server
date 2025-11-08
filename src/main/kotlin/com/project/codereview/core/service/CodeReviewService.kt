@@ -34,19 +34,15 @@ class CodeReviewService(
 
     private val logger = LoggerFactory.getLogger(CodeReviewService::class.java)
 
-    fun review(
+    suspend fun review(
         payload: GithubPayload,
-        fileContexts: List<ReviewContext>
+        fileContexts: List<ReviewContext>,
+        isOpened: Boolean = true
     ) {
-        CoroutineScope(Dispatchers.IO).launch {
-            runReviewTasks(payload, fileContexts)
+        // Summary 모델 사용 후 최소 시간 대기
+        if (isOpened) {
+            delay(ONE_MINUTE_TO_MS)
         }
-    }
-
-    private suspend fun runReviewTasks(
-        payload: GithubPayload,
-        fileContexts: List<ReviewContext>
-    ) {
         val pr = payload.pull_request
 
         val tasks = fileContexts
