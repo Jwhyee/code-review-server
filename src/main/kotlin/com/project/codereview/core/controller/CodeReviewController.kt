@@ -2,6 +2,7 @@ package com.project.codereview.core.controller
 
 import com.project.codereview.core.dto.parsePayload
 import com.project.codereview.core.service.PullRequestEventEntry
+import com.project.codereview.core.util.GithubSignature
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatus
@@ -24,8 +25,8 @@ class CodeReviewController(
         @RequestHeader("X-Hub-Signature-256", required = false) sig256: String?,
         @RequestBody rawBody: ByteArray
     ): ResponseEntity<String> {
-//        if (sig256.isNullOrBlank()) return fail("Missing signature")
-//        if (!GithubSignature.isValid(sig256, secret, rawBody)) return fail("Invalid signature")
+        if (sig256.isNullOrBlank()) return fail("Missing signature")
+        if (!GithubSignature.isValid(sig256, secret, rawBody)) return fail("Invalid signature")
 
         val payload = try {
             parsePayload(rawBody)
