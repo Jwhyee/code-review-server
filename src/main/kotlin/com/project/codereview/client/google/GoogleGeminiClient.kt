@@ -1,7 +1,10 @@
 package com.project.codereview.client.google
 
 import com.google.genai.Client
-import com.google.genai.types.*
+import com.google.genai.types.Content
+import com.google.genai.types.GenerateContentConfig
+import com.google.genai.types.Part
+import com.google.genai.types.ThinkingConfig
 import com.project.codereview.client.util.GeminiTextModel
 import com.project.codereview.client.util.ReviewLanguage
 import kotlinx.coroutines.Dispatchers
@@ -10,7 +13,6 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.jvm.optionals.getOrNull
 
 @Component
 class GoogleGeminiClient(
@@ -25,7 +27,7 @@ class GoogleGeminiClient(
     )
 
     private val think = ThinkingConfig.builder()
-        .thinkingBudget(500)
+        .thinkingBudget(1024)
         .build()
 
     private val clientPool = ConcurrentHashMap<String, Client>()
