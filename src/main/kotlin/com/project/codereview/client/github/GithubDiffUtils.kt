@@ -14,14 +14,13 @@ object GithubDiffUtils {
         val side: String,      // "RIGHT" | "LEFT"
         val snippet: String
     ) {
-        fun toReviewType(): ReviewType.ByMultiline =
-            ReviewType.ByMultiline(
-                path = path,
-                line = endLine,
-                side = side,
-                start_line = startLine,
-                start_side = side
-            )
+        fun toReviewType() = ReviewType.ByMultiline(
+            path = path,
+            line = endLine,
+            side = side,
+            start_line = startLine,
+            start_side = side
+        )
     }
 
     // 파일 단위 컨텍스트(파일별로 묶기)
