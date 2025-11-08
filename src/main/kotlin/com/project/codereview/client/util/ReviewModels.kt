@@ -7,6 +7,14 @@ enum class GeminiTextModel(
     val maxTpm: Int,
     val maxRpd: Int
 ) {
+    GEMINI_2_5_PRO(
+        modelName = "gemini-2.5-pro",
+        thinkable = true,
+        maxRpm = 2,
+        maxTpm = 125_000,
+        maxRpd = 50
+    ),
+
     GEMINI_2_5_FLASH(
         modelName = "gemini-2.5-flash",
         thinkable = true,
@@ -17,35 +25,28 @@ enum class GeminiTextModel(
 
     GEMINI_2_5_FLASH_LITE(
         modelName = "gemini-2.5-flash-lite",
-        thinkable = false,
+        thinkable = true,
         maxRpm = 15,
         maxTpm = 250_000,
         maxRpd = 1_000
     ),
 
-    GEMINI_2_5_PRO(
-        modelName = "gemini-2.5-pro",
-        thinkable = true,
-        maxRpm = 2,
-        maxTpm = 125_000,
-        maxRpd = 50
-    ),
+//    GEMINI_2_0_FLASH(
+//        modelName = "gemini-2.0-flash",
+//        thinkable = false,
+//        maxRpm = 15,
+//        maxTpm = 1_000_000,
+//        maxRpd = 200
+//    ),
 
-    GEMINI_2_0_FLASH(
-        modelName = "gemini-2.0-flash",
-        thinkable = false,
-        maxRpm = 15,
-        maxTpm = 1_000_000,
-        maxRpd = 200
-    ),
-
-    GEMINI_2_0_FLASH_LITE(
-        modelName = "gemini-2.0-flash-lite",
-        thinkable = false,
-        maxRpm = 30,
-        maxTpm = 1_000_000,
-        maxRpd = 200
-    );
+//    GEMINI_2_0_FLASH_LITE(
+//        modelName = "gemini-2.0-flash-lite",
+//        thinkable = false,
+//        maxRpm = 30,
+//        maxTpm = 1_000_000,
+//        maxRpd = 200
+//    )
+    ;
 
     fun toRateLimit(): RateLimit = RateLimit(
         rpm = maxRpm,
