@@ -20,7 +20,8 @@ data class InstallationPayload(
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class PullRequestPayload(
     val url: String,
-    val head: PullRequestHeadPayload
+    val head: PullRequestHeadPayload,
+    val base: BasePayload
 ) {
     private val _urls = url.removePrefix("https://").split("/")
     val owner = _urls[2]
@@ -30,7 +31,18 @@ data class PullRequestPayload(
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class PullRequestHeadPayload(
-    val sha: String
+    val sha: String,
+    val repo: RepositoryPayload
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class RepositoryPayload(
+    val default_branch: String
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class BasePayload(
+    val ref: String
 )
 
 val mapper = jacksonObjectMapper()

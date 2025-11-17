@@ -24,6 +24,13 @@ class PullRequestEventEntry(
             return
         }
 
+        val repositoryDefaultBranch = payload.pull_request.head.repo.default_branch
+        val targetRefBranch = payload.pull_request.base.ref
+        if (repositoryDefaultBranch == targetRefBranch) {
+            logger.debug("Do not review default branch: {}", "$repositoryDefaultBranch to $targetRefBranch")
+            return
+        }
+
         val action = GithubActionType.Companion(payload.action)
         val pr = payload.pull_request
         val diff = githubDiffClient.getPrDiff(pr.owner, pr.repo, pr.prNumber)
