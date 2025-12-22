@@ -20,7 +20,6 @@ data class ModelState(
 
 @Repository
 class GeminiModelStateManager {
-
     private val logger = LoggerFactory.getLogger(GeminiModelStateManager::class.java)
     private val modelStates = ConcurrentHashMap<GeminiTextModel, ModelState>()
 
@@ -53,6 +52,15 @@ class GeminiModelStateManager {
             blockedUntil = null
         }
         logger.info("[Model UNBLOCKED] {}", model.modelName)
+    }
+
+    fun resetAllToUsable(reason: String = "scheduled-reset") {
+        val now = Instant.now()
+        modelStates.forEach { (model, state) ->
+            state.status = ModelStatus.USABLE
+            state.blockedUntil = null
+        }
+        logger.info("[Model RESET] reason={}, at={}, models={}", reason, now, modelStates.size)
     }
 
     fun getAllStates(): Map<GeminiTextModel, ModelState> = modelStates.toMap()
