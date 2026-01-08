@@ -1,102 +1,134 @@
 package com.project.codereview.core.service
 
-import com.project.codereview.batch.FailedTaskManager
-import com.project.codereview.client.github.GithubDiffClient
-import com.project.codereview.client.github.GithubDiffUtils
+import com.project.codereview.client.github.GithubReviewClient
 import com.project.codereview.client.github.dto.ReviewContext
 import com.project.codereview.client.github.dto.ReviewType
+import com.project.codereview.client.google.GoogleGeminiClient
+import com.project.codereview.client.util.GeminiTextModel
+import com.project.codereview.client.util.REJECT_REVIEW
+import com.project.codereview.client.util.SYSTEM_PROMPT_COMMON
 import com.project.codereview.core.dto.GithubPayload
 import com.project.codereview.core.dto.PullRequestPayload
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import kotlin.random.Random
 
 @Service
 class CodeReviewService(
-    private val executor: ReviewExecutor,
-    private val failedTaskManager: FailedTaskManager
+    private val googleGeminiClient: GoogleGeminiClient,
+    private val githubReviewClient: GithubReviewClient,
 ) {
     companion object {
-        private const val RATE_PER_MINUTE = 1
-        private const val ONE_MINUTE_TO_MS = 60_000L
-        private const val DELAY_PER_TASK = ONE_MINUTE_TO_MS / RATE_PER_MINUTE
+        private const val MAX_REVIEW_COUNT = 5
+        private const val MAX_CONCURRENCY = 3
+        private const val MIN_BODY_LENGTH = 30
+
+        private const val ONE_MINUTE_MS = 60_000L
+        private const val COOLDOWN_JITTER_MS = 3_000L
+        private const val MAX_FILES_TO_REVIEW = 10
     }
 
-    data class ReviewTask(
-        val payload: PullRequestPayload,
-        val reviewContext: ReviewContext,
-        val originSnippet: String,
-        val priority: Int
-    )
-
     private val logger = LoggerFactory.getLogger(CodeReviewService::class.java)
+    private val semaphore = Semaphore(MAX_CONCURRENCY)
 
-    suspend fun review(
-        payload: GithubPayload,
-        fileContexts: List<ReviewContext>,
-        isOpened: Boolean = true
+    data class ReviewTask(
+        val pr: PullRequestPayload, val ctx: ReviewContext
     ) {
-        // Summary 모델 사용 후 최소 시간 대기
-        if (isOpened) {
-            delay(ONE_MINUTE_TO_MS)
-        }
+        val originSnippet = ctx.body
+        val path: String get() = ctx.type.path()
+    }
+
+    suspend fun review(payload: GithubPayload, contexts: List<ReviewContext>) = coroutineScope {
         val pr = payload.pull_request
 
-        val tasks = fileContexts
-            .filter { it.body.length > 30 }
-            .map { ReviewTask(pr, it, it.body, it.body.length) }
+        val tasks = if (contexts.size > MAX_FILES_TO_REVIEW) {
+            contexts.sortedByDescending { it.body.length }
+        } else {
+            contexts
+        }.filter { it.body.length > MIN_BODY_LENGTH }
+            .take(MAX_REVIEW_COUNT)
+            .map { ReviewTask(pr = pr, ctx = it) }
 
         logger.info("[Review Tasks Ready] total={}", tasks.size)
+        if (tasks.isEmpty()) return@coroutineScope
 
-        for ((index, task) in tasks.withIndex()) {
-            val prompt = buildPrompt(task.originSnippet, task.reviewContext)
-            if (prompt.isBlank()) {
-                logger.warn("[Review NonRetryable] Prompt is empty")
-                continue
-            }
-
-            val cmd = ReviewCommand(payload = payload, reviewContext = task.reviewContext, prompt)
-
-            val path = task.reviewContext.type.path()
-            if (path.isBlank()) {
-                logger.warn("[Review NonRetryable] File path is empty")
-                continue
-            }
-
-            logger.info("[Review Start] file={} ({} / {})", path, index + 1, tasks.size)
-
-            when (val outcome = executor.execute(cmd)) {
-                is ReviewOutcome.Success -> {
-                    logger.info("[Review Success] file={}", path)
-                }
-
-                is ReviewOutcome.Retryable -> {
-                    failedTaskManager.add(
-                        FailedTaskManager.OriginalTask(payload, task.reviewContext),
-                        outcome.promptUsed
-                    )
-                    logger.warn("[Review Retryable] file={}, reason={}", path, outcome.reason)
-                }
-
-                is ReviewOutcome.NonRetryable -> {
-                    logger.error("[Review NonRetryable] file={}, reason={}", path, outcome.reason)
+        tasks.mapIndexed { index, task ->
+            async {
+                semaphore.withPermit {
+                    processOne(task, index + 1, tasks.size)
                 }
             }
-
-            delay(DELAY_PER_TASK)
-        }
+        }.awaitAll()
 
         logger.info("[Review Completed] total={}", tasks.size)
     }
 
-    private fun buildPrompt(originSnippet: String, ctx: ReviewContext): String {
-        return when (ctx.type) {
-            is ReviewType.ByFile -> ctx.body
-            is ReviewType.ByComment -> ""
-            is ReviewType.ByMultiline -> """
+    private suspend fun processOne(task: ReviewTask, order: Int, total: Int) {
+        val path = task.path
+        if (path.isBlank()) {
+            logger.warn("[Review Skip] Empty file path ({} / {})", order, total)
+            return
+        }
+
+        val prompt = buildPrompt(task.originSnippet, task.ctx)
+        if (prompt.isBlank()) {
+            logger.warn("[Review Skip] Empty prompt file={} ({} / {})", path, order, total)
+            return
+        }
+
+        logger.info("[Review Start] file={} ({} / {})", path, order, total)
+
+        val model = GeminiTextModel.GEMINI_2_5_FLASH_LITE
+
+        val reviewText = callGeminiOrNull(path, prompt, model) ?: run {
+            logger.warn("[Review Failed] Gemini returned null/blank file={} model={}", path, model.modelName)
+            return
+        }
+
+        if (reviewText.contains(REJECT_REVIEW)) {
+            logger.info("[Review Rejected] file={} model={}", path, model.modelName)
+            cooldownAfterCall()
+            return
+        }
+
+        val posted = postCommentOrFalse(task.ctx, reviewText)
+        if (posted) logger.info("[Review Success] file={} model={}", path, model.modelName)
+        else logger.warn("[Review Failed] Comment post failed file={} model={}", path, model.modelName)
+
+        cooldownAfterCall()
+    }
+
+    private suspend fun callGeminiOrNull(path: String, prompt: String, model: GeminiTextModel) = try {
+        logger.info("[Using Model] {}", model.modelName)
+        googleGeminiClient.chat(path, prompt, model, SYSTEM_PROMPT_COMMON)?.takeIf { it.isNotBlank() }
+    } catch (t: Throwable) {
+        logger.warn("[Gemini Error] model={} cause={}", model.modelName, t.message)
+        null
+    }
+
+    private suspend fun postCommentOrFalse(ctx: ReviewContext, review: String): Boolean = try {
+        githubReviewClient.addReviewComment(ctx, review)
+        true
+    } catch (t: Throwable) {
+        logger.warn("[GitHub Comment Error] {}", t.message ?: t::class.java.simpleName, t)
+        false
+    }
+
+    private suspend fun cooldownAfterCall() {
+        val jitter = Random.nextLong(0, COOLDOWN_JITTER_MS + 1)
+        delay(ONE_MINUTE_MS + jitter)
+    }
+
+    private fun buildPrompt(originSnippet: String, ctx: ReviewContext): String = when (ctx.type) {
+        is ReviewType.ByFile -> ctx.body
+        is ReviewType.ByComment -> ""
+        is ReviewType.ByMultiline -> """
 ## 파일 전체
 ```diff
 ${originSnippet.trimIndent()}
@@ -107,6 +139,5 @@ ${originSnippet.trimIndent()}
 ${ctx.body.trimIndent()}
 ```
             """.trimIndent()
-        }
     }
 }
