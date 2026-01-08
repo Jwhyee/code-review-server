@@ -1,5 +1,9 @@
 package com.project.codereview.client.util
 
+/**
+ * https://aistudio.google.com/usage?timeRange=last-28-days&tab=rate-limit&project=gen-lang-client-0257700374
+ * 모든 모델 체크 후 "텍스트 출력 모델"만 사용 가능
+ * */
 enum class GeminiTextModel(
     val modelName: String,
     val thinkable: Boolean,
@@ -7,12 +11,12 @@ enum class GeminiTextModel(
     val maxTpm: Int,
     val maxRpd: Int
 ) {
-    GEMINI_2_5_PRO(
-        modelName = "gemini-2.5-pro",
+    GEMINI_3_FLASH(
+        modelName = "gemini-2.5-flash",
         thinkable = true,
-        maxRpm = 2,
-        maxTpm = 125_000,
-        maxRpd = 50
+        maxRpm = 10,
+        maxTpm = 250_000,
+        maxRpd = 250
     ),
 
     GEMINI_2_5_FLASH(
@@ -30,6 +34,14 @@ enum class GeminiTextModel(
         maxTpm = 250_000,
         maxRpd = 1_000
     ),
+
+//    GEMINI_2_5_PRO(
+//        modelName = "gemini-2.5-pro",
+//        thinkable = true,
+//        maxRpm = 2,
+//        maxTpm = 125_000,
+//        maxRpd = 50
+//    ),
 
 //    GEMINI_2_0_FLASH(
 //        modelName = "gemini-2.0-flash",

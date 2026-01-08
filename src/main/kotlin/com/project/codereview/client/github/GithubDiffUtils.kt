@@ -30,13 +30,110 @@ object GithubDiffUtils {
         val diffs: List<DiffInfo>
     )
 
+    private data class FileMeta(
+        val path: String,
+        var isDeleted: Boolean = false,
+        var plusCount: Int = 0,   // import 제거 후 + 라인 개수
+        var minusCount: Int = 0,  // import 제거 후 - 라인 개수
+        val originLines: MutableList<String> = mutableListOf()
+    ) {
+        fun originSnippet(): String = originLines.joinToString("\n")
+
+        // 필터 조건
+        fun shouldSkip(): Boolean {
+            // 1) 파일 삭제
+            if (isDeleted) return true
+
+            // 2) import 제거 후 변경이 전부 삭제(-)만 있는 경우
+            if (plusCount == 0 && minusCount > 0) return true
+
+            // (추가로 넣어두면 실사용에서 편함) import만 바뀐 파일이라 필터 후 변경이 아무 것도 남지 않은 경우
+            if (plusCount == 0 && minusCount == 0) return true
+
+            return false
+        }
+    }
+
     private val fileHeader = Regex("""^diff --git a/(.+?) b/(.+)$""")
     private val hunkHeader = Regex("""@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@""")
     private val importLineRegex = Regex("""^[+\- ]\s*import\b""")
 
     private fun isImportLineInDiff(line: String): Boolean = importLineRegex.containsMatchIn(line)
 
+    // diff 전체를 파일 단위로 훑어서:
+    // - 삭제 파일인지
+    // - (import 제거 후) +/− 라인이 몇 개인지
+    // - (import 제거 후) 원본 스니펫 라인 모음(+/- 라인만)
+    // 를 만든다.
+    private fun parseFileMetas(diffText: String): Map<String, FileMeta> {
+        val text = diffText.replace("\r\n", "\n")
+        val lines = text.lineSequence().toList()
+
+        val metas = linkedMapOf<String, FileMeta>()
+        var currentPath: String? = null
+        var inHunk = false
+
+        fun currentMeta(): FileMeta? = currentPath?.let { metas[it] }
+
+        lines.forEach { rawLine ->
+            val raw = rawLine.trimEnd('\r')
+
+            when {
+                raw.startsWith("diff --git ") -> {
+                    inHunk = false
+                    val m = fileHeader.matchEntire(raw)
+                    currentPath = if (m != null) {
+                        var p = m.groupValues[2]
+                        if (p.startsWith("b/")) p = p.substring(2)
+                        p
+                    } else null
+
+                    if (currentPath != null) {
+                        metas.putIfAbsent(currentPath!!, FileMeta(path = currentPath!!))
+                    }
+                }
+
+                currentPath != null && raw.startsWith("deleted file mode") -> {
+                    currentMeta()?.isDeleted = true
+                }
+
+                currentPath != null && raw.startsWith("+++ ") -> {
+                    // 삭제 파일이면 보통 "+++ /dev/null"
+                    if (raw.contains("/dev/null")) {
+                        currentMeta()?.isDeleted = true
+                    }
+                }
+
+                raw.startsWith("@@ ") -> {
+                    if (currentPath != null) inHunk = true
+                }
+
+                // hunk 내부에서 +/− 라인만 모은다 (import 라인은 무조건 제외)
+                inHunk && currentPath != null -> {
+                    if (raw.isBlank()) return@forEach
+
+                    // 헤더 라인(---, +++)은 제외
+                    if (raw.startsWith("--- ") || raw.startsWith("+++ ")) return@forEach
+
+                    val c = raw.firstOrNull() ?: return@forEach
+                    if (c == '+' || c == '-') {
+                        if (isImportLineInDiff(raw)) return@forEach
+
+                        val meta = currentMeta() ?: return@forEach
+                        meta.originLines += raw
+                        if (c == '+') meta.plusCount++ else meta.minusCount++
+                    }
+                }
+
+                else -> Unit
+            }
+        }
+
+        return metas
+    }
+
     // hunk 파싱 → 멀티라인 범위(DiffInfo) 추출
+    // import 라인은 여기서도 "항상" 제거되도록 강제한다.
     private fun buildRequests(diffText: String): List<DiffInfo> {
         val text = diffText.replace("\r\n", "\n")
         val lines = text.lineSequence().toList()
@@ -56,20 +153,17 @@ object GithubDiffUtils {
         var leftMinOld: Int? = null
         var leftMaxOld: Int? = null
         val leftSnippet = mutableListOf<String>()
-        var sawPlusInHunk = false
+        var sawNonImportPlusInHunk = false
 
         fun endRightBlockIfAny(path: String) {
-            if (collectingRight && rightStartNew != null && rightEndNew != null) {
-                val filtered = rightSnippet.filterNot(::isImportLineInDiff)
-                if (filtered.isNotEmpty()) {
-                    ranges += DiffInfo(
-                        path = path,
-                        startLine = rightStartNew!!,
-                        endLine = rightEndNew!!,
-                        side = "RIGHT",
-                        snippet = filtered.joinToString("\n")
-                    )
-                }
+            if (collectingRight && rightStartNew != null && rightEndNew != null && rightSnippet.isNotEmpty()) {
+                ranges += DiffInfo(
+                    path = path,
+                    startLine = rightStartNew!!,
+                    endLine = rightEndNew!!,
+                    side = "RIGHT",
+                    snippet = rightSnippet.joinToString("\n")
+                )
             }
             collectingRight = false
             rightStartNew = null
@@ -81,23 +175,21 @@ object GithubDiffUtils {
             val path = currentPath ?: return
             endRightBlockIfAny(path)
 
-            if (!sawPlusInHunk && leftMinOld != null && leftMaxOld != null && leftSnippet.isNotEmpty()) {
-                val filtered = leftSnippet.filterNot(::isImportLineInDiff)
-                if (filtered.isNotEmpty()) {
-                    ranges += DiffInfo(
-                        path = path,
-                        startLine = leftMinOld!!,
-                        endLine = leftMaxOld!!,
-                        side = "LEFT",
-                        snippet = filtered.joinToString("\n")
-                    )
-                }
+            // +가(=추가/수정) 없고, -만 있는 경우 LEFT로 모은다 (단, import는 제외된 상태)
+            if (!sawNonImportPlusInHunk && leftMinOld != null && leftMaxOld != null && leftSnippet.isNotEmpty()) {
+                ranges += DiffInfo(
+                    path = path,
+                    startLine = leftMinOld!!,
+                    endLine = leftMaxOld!!,
+                    side = "LEFT",
+                    snippet = leftSnippet.joinToString("\n")
+                )
             }
 
             leftMinOld = null
             leftMaxOld = null
             leftSnippet.clear()
-            sawPlusInHunk = false
+            sawNonImportPlusInHunk = false
         }
 
         fun startNewHunk(oldStart: Int, newStart: Int) {
@@ -114,7 +206,7 @@ object GithubDiffUtils {
             leftMinOld = null
             leftMaxOld = null
             leftSnippet.clear()
-            sawPlusInHunk = false
+            sawNonImportPlusInHunk = false
         }
 
         lines.forEach { rawLine ->
@@ -149,6 +241,8 @@ object GithubDiffUtils {
                     when (raw[0]) {
                         ' ' -> {
                             if (collectingRight) {
+                                // 컨텍스트 라인은 스니펫에 넣을지 말지 취향인데,
+                                // 기존 코드가 넣고 있어서 유지
                                 rightSnippet += raw
                                 rightEndNew = newLine
                             }
@@ -156,7 +250,13 @@ object GithubDiffUtils {
                         }
 
                         '+' -> {
-                            sawPlusInHunk = true
+                            // import 라인은 무조건 스킵 (라인 번호만 진행)
+                            if (isImportLineInDiff(raw)) {
+                                newLine++
+                                return@forEach
+                            }
+
+                            sawNonImportPlusInHunk = true
                             if (!collectingRight) {
                                 collectingRight = true
                                 rightStartNew = newLine
@@ -167,6 +267,12 @@ object GithubDiffUtils {
                         }
 
                         '-' -> {
+                            // import 라인은 무조건 스킵 (라인 번호만 진행)
+                            if (isImportLineInDiff(raw)) {
+                                oldLine++
+                                return@forEach
+                            }
+
                             if (collectingRight) endRightBlockIfAny(currentPath!!)
                             if (leftMinOld == null) leftMinOld = oldLine
                             leftMaxOld = oldLine
@@ -187,78 +293,29 @@ object GithubDiffUtils {
         return ranges
     }
 
-    // 파일별 원본 스니펫 생성(선택적 import 필터링)
-    private fun buildOrigins(
-        diffText: String,
-        filterImportsInOrigin: Boolean = false
-    ): Map<String, String> {
-        val text = diffText.replace("\r\n", "\n")
-        val lines = text.lineSequence().toList()
-
-        val originByFile = mutableMapOf<String, MutableList<String>>()
-        var currentPath: String? = null
-        var inHunk = false
-
-        lines.forEach { rawLine ->
-            val raw = rawLine.trimEnd('\r')
-            when {
-                raw.startsWith("diff --git ") -> {
-                    inHunk = false
-                    val m = fileHeader.matchEntire(raw)
-                    currentPath = if (m != null) {
-                        var p = m.groupValues[2]
-                        if (p.startsWith("b/")) p = p.substring(2)
-                        p
-                    } else null
-                    if (currentPath != null) originByFile.putIfAbsent(currentPath!!, mutableListOf())
-                }
-
-                raw.startsWith("@@ ") -> {
-                    if (currentPath != null) inHunk = true
-                }
-
-                inHunk && currentPath != null -> {
-                    if (raw.isBlank()) return@forEach
-                    if (raw[0] == '+' || raw[0] == '-') {
-                        if (!filterImportsInOrigin || !isImportLineInDiff(raw)) {
-                            originByFile[currentPath]!!.add(raw)
-                        }
-                    }
-                    if (raw.startsWith("diff --git ") || raw.startsWith("index ") || raw.startsWith("--- ") || raw.startsWith("+++ ")) {
-                        inHunk = false
-                    }
-                }
-
-                else -> Unit
-            }
-        }
-
-        return originByFile.mapValues { (_, v) -> v.joinToString("\n") }
-    }
-
     // 내부 공통: 파일 컨텍스트 구성
-    private fun buildFileContextsInternal(
-        diffText: String,
-        filterImportsInOrigin: Boolean
-    ): List<FileContext> {
-        val diffs = buildRequests(diffText)
-        val originMap = buildOrigins(diffText, filterImportsInOrigin)
-        return diffs.groupBy { it.path }
-            .map { (path, list) ->
+    private fun buildFileContextsInternal(diffText: String): List<FileContext> {
+        val metas = parseFileMetas(diffText)
+        val diffs = buildRequests(diffText).groupBy { it.path }
+
+        return metas.values
+            .asSequence()
+            .filterNot { it.shouldSkip() }
+            .map { meta ->
                 FileContext(
-                    path = path,
-                    originSnippet = originMap[path].orEmpty(),
-                    diffs = list
+                    path = meta.path,
+                    originSnippet = meta.originSnippet(),
+                    diffs = diffs[meta.path].orEmpty()
                 )
             }
+            .toList()
     }
 
     fun buildReviewContextsByMultiline(
         diffText: String,
-        payload: GithubPayload,
-        filterImportsInOrigin: Boolean = true,
+        payload: GithubPayload
     ): List<ReviewContext> {
-        val fileContexts = buildFileContextsInternal(diffText, filterImportsInOrigin)
+        val fileContexts = buildFileContextsInternal(diffText)
         return fileContexts.flatMap { file ->
             file.diffs.map { d ->
                 ReviewContext(
@@ -270,12 +327,13 @@ object GithubDiffUtils {
         }
     }
 
+    // import 필터는 강제(인자로 받지 않음)
+    // + 두 가지 필터(삭제 파일, 삭제만 있는 파일)를 적용한 뒤 결과를 만든다.
     fun buildReviewContextsByFile(
         diffText: String,
-        payload: GithubPayload,
-        filterImportsInOrigin: Boolean = false,
+        payload: GithubPayload
     ): List<ReviewContext> {
-        val fileContexts = buildFileContextsInternal(diffText, filterImportsInOrigin)
+        val fileContexts = buildFileContextsInternal(diffText)
         return fileContexts.map { file ->
             ReviewContext(
                 body = file.originSnippet,
