@@ -1,15 +1,13 @@
 package com.project.codereview.core.dto
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import com.fasterxml.jackson.module.kotlin.readValue
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class GithubPayload(
     val action: String,
     val number: String,
     val installation: InstallationPayload,
-    val pull_request: PullRequestPayload
+    val pull_request: PullRequestPayload,
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -20,6 +18,7 @@ data class InstallationPayload(
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class PullRequestPayload(
     val url: String,
+    val labels: List<LabelPayload> = emptyList(),
     val head: PullRequestHeadPayload,
     val base: BasePayload
 ) {
@@ -27,6 +26,8 @@ data class PullRequestPayload(
     val owner = _urls[2]
     val repo = _urls[3]
     val prNumber = _urls[5]
+
+    val hasReviewRequestLabel get() = labels.any { it.name == "review-bot" }
 }
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -45,8 +46,7 @@ data class BasePayload(
     val ref: String
 )
 
-val mapper = jacksonObjectMapper()
-
-fun parsePayload(rawBody: ByteArray): GithubPayload {
-    return mapper.readValue(rawBody)
-}
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class LabelPayload(
+    val name: String
+)
