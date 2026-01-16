@@ -3,6 +3,7 @@ package com.project.codereview.core.service
 import com.project.codereview.client.github.GithubDiffClient
 import com.project.codereview.client.github.GithubDiffUtils
 import com.project.codereview.client.github.dto.ReviewContext
+import com.project.codereview.client.util.GeminiTextModel
 import com.project.codereview.core.dto.GithubActionType
 import com.project.codereview.core.dto.GithubEvent
 import com.project.codereview.core.dto.GithubPayload
@@ -17,6 +18,10 @@ class CodeReviewFacade(
     private val githubDiffClient: GithubDiffClient,
     private val codeSummaryService: CodeSummaryService
 ) {
+    companion object {
+        val SUMMARY_MODEL = GeminiTextModel.GEMINI_2_5_FLASH_LITE
+        val REVIEW_MODEL = GeminiTextModel.GEMINI_3_FLASH
+    }
     private val logger = LoggerFactory.getLogger(CodeReviewFacade::class.java)
 
     suspend fun handle(githubEvent: GithubEvent, payload: GithubPayload) = coroutineScope {
@@ -30,7 +35,7 @@ class CodeReviewFacade(
         when (action) {
             GithubActionType.OPENED -> {
                 withPrContexts(pullRequestPayload, payload) { contexts ->
-                    codeSummaryService.summary(payload, contexts)
+                    codeSummaryService.summary(payload, contexts, SUMMARY_MODEL)
                 }
             }
 
@@ -41,7 +46,7 @@ class CodeReviewFacade(
                 }
 
                 withPrContexts(pullRequestPayload, payload) { contexts ->
-                    reviewJobQueue.enqueue(payload, contexts)
+                    reviewJobQueue.enqueue(payload, contexts, REVIEW_MODEL)
                 }
             }
 

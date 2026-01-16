@@ -1,6 +1,7 @@
 package com.project.codereview.core.service
 
 import com.project.codereview.client.github.dto.ReviewContext
+import com.project.codereview.client.util.GeminiTextModel
 import com.project.codereview.core.dto.GithubPayload
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
@@ -25,7 +26,8 @@ class ReviewJobQueue(
 
     data class ReviewJob(
         val payload: GithubPayload,
-        val contexts: List<ReviewContext>
+        val contexts: List<ReviewContext>,
+        val model: GeminiTextModel
     )
 
     @PostConstruct
@@ -34,7 +36,7 @@ class ReviewJobQueue(
             scope.launch(CoroutineName("review-worker-$idx")) {
                 for (job in channel) {
                     runCatching {
-                        codeReviewService.review(job.payload, job.contexts)
+                        codeReviewService.review(job.payload, job.contexts, job.model)
                     }.onFailure { t ->
                         logger.error(
                             "[ReviewJob] failed worker={} cause={}",
@@ -50,8 +52,8 @@ class ReviewJobQueue(
         logger.info("[ReviewJobQueue] started workers={}", workerCount)
     }
 
-    fun enqueue(payload: GithubPayload, contexts: List<ReviewContext>): Boolean {
-        val res = channel.trySend(ReviewJob(payload, contexts))
+    fun enqueue(payload: GithubPayload, contexts: List<ReviewContext>, model: GeminiTextModel): Boolean {
+        val res = channel.trySend(ReviewJob(payload, contexts, model))
         if (res.isFailure) {
             logger.warn("[ReviewJobQueue] enqueue failed cause={}", res.exceptionOrNull()?.message)
         }

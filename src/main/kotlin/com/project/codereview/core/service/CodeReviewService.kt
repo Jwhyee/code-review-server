@@ -44,7 +44,11 @@ class CodeReviewService(
         val path: String get() = ctx.type.path()
     }
 
-    suspend fun review(payload: GithubPayload, contexts: List<ReviewContext>) = coroutineScope {
+    suspend fun review(
+        payload: GithubPayload,
+        contexts: List<ReviewContext>,
+        model: GeminiTextModel
+    ) = coroutineScope {
         val pr = payload.pull_request
 
         val tasks = if (contexts.size > MAX_FILES_TO_REVIEW) {
@@ -61,7 +65,7 @@ class CodeReviewService(
         tasks.mapIndexed { index, task ->
             async {
                 semaphore.withPermit {
-                    processOne(task, index + 1, tasks.size)
+                    processOne(task, model, index + 1, tasks.size)
                 }
             }
         }.awaitAll()
@@ -69,7 +73,7 @@ class CodeReviewService(
         logger.info("[Review Completed] total={}", tasks.size)
     }
 
-    private suspend fun processOne(task: ReviewTask, order: Int, total: Int) {
+    private suspend fun processOne(task: ReviewTask, model: GeminiTextModel, order: Int, total: Int) {
         val path = task.path
         if (path.isBlank()) {
             logger.warn("[Review Skip] Empty file path ({} / {})", order, total)
@@ -83,8 +87,6 @@ class CodeReviewService(
         }
 
         logger.info("[Review Start] file={} ({} / {})", path, order, total)
-
-        val model = GeminiTextModel.GEMINI_2_5_FLASH_LITE
 
         val reviewText = callGeminiOrNull(path, prompt, model) ?: run {
             logger.warn("[Review Failed] Gemini returned null/blank file={} model={}", path, model.modelName)

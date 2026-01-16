@@ -58,17 +58,4 @@ enum class GeminiTextModel(
 //        maxTpm = 1_000_000,
 //        maxRpd = 200
 //    )
-    ;
-
-    fun toRateLimit(): RateLimit = RateLimit(
-        rpm = maxRpm,
-        tpm = maxTpm,
-        rpd = maxRpd
-    )
 }
-
-data class RateLimit(
-    val rpm: Int,
-    val tpm: Int,
-    val rpd: Int
-)

@@ -17,7 +17,7 @@ class CodeSummaryService(
 ) {
     private val logger = LoggerFactory.getLogger(CodeSummaryService::class.java)
 
-    suspend fun summary(payload: GithubPayload, fileContexts: List<ReviewContext>) {
+    suspend fun summary(payload: GithubPayload, fileContexts: List<ReviewContext>, model: GeminiTextModel) {
         logger.info("[Summary] Making summary ...")
 
         val prompt = fileContexts.buildPrompt()
@@ -26,12 +26,10 @@ class CodeSummaryService(
             return
         }
 
-        val summaryText =
-            generateSummaryOnce(payload, prompt, GeminiTextModel.GEMINI_3_FLASH)
-                ?: generateSummaryOnce(payload, prompt, GeminiTextModel.GEMINI_2_5_FLASH)
+        val summaryText = generateSummaryOnce(payload, prompt, model)
 
         if (summaryText.isNullOrBlank()) {
-            logger.warn("[Summary] Failed with both models. Stop.")
+            logger.warn("[Summary] Failed with ${model.modelName} model. Stop.")
             return
         }
 
