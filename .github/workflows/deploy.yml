@@ -45,6 +45,8 @@ jobs:
   dockerize:
     runs-on: self-hosted
     needs: build
+    env:
+      DOCKER_API_VERSION: "1.43"
 
     steps:
       - name: Checkout repository
