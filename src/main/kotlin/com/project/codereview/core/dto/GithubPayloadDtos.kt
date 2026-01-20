@@ -28,6 +28,7 @@ data class PullRequestPayload(
     val prNumber = _urls[5]
 
     val hasReviewRequestLabel get() = labels.any { it.name == "review-bot" }
+    val isMergingToDefaultBranch get() = head.repo.default_branch == base.ref
 }
 
 @JsonIgnoreProperties(ignoreUnknown = true)

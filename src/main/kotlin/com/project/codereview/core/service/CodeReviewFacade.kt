@@ -45,6 +45,11 @@ class CodeReviewFacade(
                     return@coroutineScope
                 }
 
+                if (pullRequestPayload.isMergingToDefaultBranch) {
+                    logger.info("Ignored LABELED: merging to default branch")
+                    return@coroutineScope
+                }
+
                 withPrContexts(pullRequestPayload, payload) { contexts ->
                     reviewJobQueue.enqueue(payload, contexts, REVIEW_MODEL)
                 }
