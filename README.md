@@ -58,7 +58,7 @@ Kotlin, Spring Boot, Google Gemini 기반의 AI 코드 리뷰 어시스턴트입
 
 ## 배포 프로세스
 
-<img width="1024" height="523" alt="Image" src="https://github.com/user-attachments/assets/cec29ab5-c2b1-49f3-a6c5-131c419c2660" />
+<img width="1024" height="523" alt="image" src="https://github.com/user-attachments/assets/6ffea30a-8eca-4207-b15d-bb196c573a91" />
 
 ## 사용 API Document
 
