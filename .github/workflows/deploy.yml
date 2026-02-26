@@ -97,7 +97,9 @@ jobs:
 
       - name: Deploy to EC2
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "\
+          mkdir -p ~/.ssh
+          ssh-keyscan ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "\
             export WEBHOOK_SECRET='${{ secrets.WEBHOOK_SECRET }}' && \
             export GEMINI_API_KEY='${{ secrets.GEMINI_API_KEY }}' && \
             export API_TOKEN_GITHUB='${{ secrets.API_TOKEN_GITHUB }}' && \

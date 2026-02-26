@@ -1,6 +1,13 @@
 FROM eclipse-temurin:21-jdk
 
-ARG JAR_FILE=build/libs/*.jar
-COPY ${JAR_FILE} app.jar
+# Create a non-root user and group
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
-ENTRYPOINT ["java", "-jar", "/app.jar"]
+WORKDIR /app
+
+ARG JAR_FILE=build/libs/*.jar
+COPY --chown=appuser:appgroup ${JAR_FILE} app.jar
+
+USER appuser
+
+ENTRYPOINT ["java", "-jar", "app.jar"]
