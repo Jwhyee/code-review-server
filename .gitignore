@@ -35,6 +35,10 @@ out/
 /nbdist/
 /.nb-gradle/
 
+### AI ###
+.sisyphus/
+AGENTS.md
+
 ### VS Code ###
 .vscode/
 
