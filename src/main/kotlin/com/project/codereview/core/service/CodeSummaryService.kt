@@ -4,7 +4,7 @@ import com.project.codereview.client.github.GithubReviewClient
 import com.project.codereview.domain.model.ReviewContext
 import com.project.codereview.domain.model.ReviewType
 import com.project.codereview.client.google.GoogleGeminiClient
-import com.project.codereview.client.util.GeminiTextModel
+import com.project.codereview.domain.model.GeminiTextModel
 import com.project.codereview.client.util.SUMMARY_PROMPT
 import com.project.codereview.domain.model.GithubPayload
 import org.slf4j.LoggerFactory

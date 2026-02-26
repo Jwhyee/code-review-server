@@ -2,6 +2,7 @@ package com.project.codereview.core.controller
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
+import com.fasterxml.jackson.databind.DeserializationFeature
 import com.project.codereview.domain.model.GithubEvent
 import com.project.codereview.domain.model.GithubPayload
 import com.project.codereview.core.service.CodeReviewFacade
@@ -21,7 +22,7 @@ class CodeReviewController(
     private val codeReviewFacade: CodeReviewFacade
 ) {
     private val log = LoggerFactory.getLogger(CodeReviewController::class.java)
-    private val mapper = jacksonObjectMapper()
+    private val mapper = jacksonObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
     @PostMapping("/api/code/review")
     suspend fun webhook(

@@ -1,4 +1,4 @@
-package com.project.codereview.client.util
+package com.project.codereview.domain.model
 
 /**
  * https://aistudio.google.com/usage?timeRange=last-28-days&tab=rate-limit&project=gen-lang-client-0257700374

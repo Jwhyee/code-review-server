@@ -3,7 +3,7 @@ package com.project.codereview.core.service
 import com.project.codereview.client.github.GithubDiffClient
 import com.project.codereview.client.github.GithubDiffUtils
 import com.project.codereview.domain.model.ReviewContext
-import com.project.codereview.client.util.GeminiTextModel
+import com.project.codereview.domain.model.GeminiTextModel
 import com.project.codereview.domain.model.GithubActionType
 import com.project.codereview.domain.model.GithubEvent
 import com.project.codereview.domain.model.GithubPayload

@@ -5,7 +5,7 @@ import com.google.genai.types.Content
 import com.google.genai.types.GenerateContentConfig
 import com.google.genai.types.Part
 import com.google.genai.types.ThinkingConfig
-import com.project.codereview.client.util.GeminiTextModel
+import com.project.codereview.domain.model.GeminiTextModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory

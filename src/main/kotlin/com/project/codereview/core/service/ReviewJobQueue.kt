@@ -1,7 +1,7 @@
 package com.project.codereview.core.service
 
 import com.project.codereview.domain.model.ReviewContext
-import com.project.codereview.client.util.GeminiTextModel
+import com.project.codereview.domain.model.GeminiTextModel
 import com.project.codereview.domain.model.GithubPayload
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
