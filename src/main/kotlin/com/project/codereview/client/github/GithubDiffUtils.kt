@@ -1,8 +1,8 @@
 package com.project.codereview.client.github
 
-import com.project.codereview.client.github.dto.ReviewContext
-import com.project.codereview.client.github.dto.ReviewType
-import com.project.codereview.core.dto.GithubPayload
+import com.project.codereview.domain.model.ReviewContext
+import com.project.codereview.domain.model.ReviewType
+import com.project.codereview.domain.model.GithubPayload
 
 object GithubDiffUtils {
 

@@ -1,6 +1,6 @@
 package com.project.codereview.client.github
 
-import com.project.codereview.client.github.dto.ReviewContext
+import com.project.codereview.domain.model.ReviewContext
 import org.springframework.stereotype.Service
 import org.springframework.web.reactive.function.client.WebClient
 

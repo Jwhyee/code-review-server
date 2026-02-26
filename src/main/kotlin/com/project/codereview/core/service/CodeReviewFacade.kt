@@ -2,12 +2,12 @@ package com.project.codereview.core.service
 
 import com.project.codereview.client.github.GithubDiffClient
 import com.project.codereview.client.github.GithubDiffUtils
-import com.project.codereview.client.github.dto.ReviewContext
+import com.project.codereview.domain.model.ReviewContext
 import com.project.codereview.client.util.GeminiTextModel
-import com.project.codereview.core.dto.GithubActionType
-import com.project.codereview.core.dto.GithubEvent
-import com.project.codereview.core.dto.GithubPayload
-import com.project.codereview.core.dto.PullRequestPayload
+import com.project.codereview.domain.model.GithubActionType
+import com.project.codereview.domain.model.GithubEvent
+import com.project.codereview.domain.model.GithubPayload
+import com.project.codereview.domain.model.PullRequestPayload
 import kotlinx.coroutines.coroutineScope
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service

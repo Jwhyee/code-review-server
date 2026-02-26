@@ -2,8 +2,8 @@ package com.project.codereview.core.controller
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
-import com.project.codereview.core.dto.GithubEvent
-import com.project.codereview.core.dto.GithubPayload
+import com.project.codereview.domain.model.GithubEvent
+import com.project.codereview.domain.model.GithubPayload
 import com.project.codereview.core.service.CodeReviewFacade
 import com.project.codereview.core.util.GithubSignature
 import org.slf4j.LoggerFactory

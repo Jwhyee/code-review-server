@@ -1,4 +1,4 @@
-package com.project.codereview.core.dto
+package com.project.codereview.domain.model
 
 enum class GithubEvent(val event: String) {
     PULL_REQUEST("pull_request"),

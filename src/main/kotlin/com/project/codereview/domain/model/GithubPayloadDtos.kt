@@ -1,4 +1,4 @@
-package com.project.codereview.core.dto
+package com.project.codereview.domain.model
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 

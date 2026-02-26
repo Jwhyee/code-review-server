@@ -1,14 +1,14 @@
 package com.project.codereview.core.service
 
 import com.project.codereview.client.github.GithubReviewClient
-import com.project.codereview.client.github.dto.ReviewContext
-import com.project.codereview.client.github.dto.ReviewType
+import com.project.codereview.domain.model.ReviewContext
+import com.project.codereview.domain.model.ReviewType
 import com.project.codereview.client.google.GoogleGeminiClient
 import com.project.codereview.client.util.GeminiTextModel
 import com.project.codereview.client.util.REJECT_REVIEW
 import com.project.codereview.client.util.SYSTEM_PROMPT_COMMON
-import com.project.codereview.core.dto.GithubPayload
-import com.project.codereview.core.dto.PullRequestPayload
+import com.project.codereview.domain.model.GithubPayload
+import com.project.codereview.domain.model.PullRequestPayload
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope

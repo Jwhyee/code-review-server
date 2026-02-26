@@ -1,12 +1,12 @@
 package com.project.codereview.core.service
 
 import com.project.codereview.client.github.GithubReviewClient
-import com.project.codereview.client.github.dto.ReviewContext
-import com.project.codereview.client.github.dto.ReviewType
+import com.project.codereview.domain.model.ReviewContext
+import com.project.codereview.domain.model.ReviewType
 import com.project.codereview.client.google.GoogleGeminiClient
 import com.project.codereview.client.util.GeminiTextModel
 import com.project.codereview.client.util.SUMMARY_PROMPT
-import com.project.codereview.core.dto.GithubPayload
+import com.project.codereview.domain.model.GithubPayload
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 

@@ -1,6 +1,5 @@
-package com.project.codereview.client.github.dto
+package com.project.codereview.domain.model
 
-import com.project.codereview.core.dto.GithubPayload
 import kotlin.String
 
 data class ReviewContext(

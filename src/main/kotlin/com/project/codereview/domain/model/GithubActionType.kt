@@ -1,4 +1,4 @@
-package com.project.codereview.core.dto
+package com.project.codereview.domain.model
 
 enum class GithubActionType(val value: String) {
     ASSIGNED("assigned"),

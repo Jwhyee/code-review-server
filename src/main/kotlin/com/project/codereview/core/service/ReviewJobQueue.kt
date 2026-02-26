@@ -1,8 +1,8 @@
 package com.project.codereview.core.service
 
-import com.project.codereview.client.github.dto.ReviewContext
+import com.project.codereview.domain.model.ReviewContext
 import com.project.codereview.client.util.GeminiTextModel
-import com.project.codereview.core.dto.GithubPayload
+import com.project.codereview.domain.model.GithubPayload
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
 import kotlinx.coroutines.*
