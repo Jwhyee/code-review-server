@@ -12,7 +12,8 @@ import org.springframework.stereotype.Component
 
 @Component
 class ReviewJobQueue(
-    private val codeReviewService: CodeReviewService
+    private val codeReviewService: CodeReviewService,
+    private val webhookEventService: WebhookEventService
 ) {
     private val logger = LoggerFactory.getLogger(ReviewJobQueue::class.java)
 
@@ -25,6 +26,7 @@ class ReviewJobQueue(
     private val workerCount = 1
 
     data class ReviewJob(
+        val deliveryId: String,
         val payload: GithubPayload,
         val contexts: List<ReviewContext>,
         val model: GeminiTextModel
@@ -36,7 +38,9 @@ class ReviewJobQueue(
             scope.launch(CoroutineName("review-worker-$idx")) {
                 for (job in channel) {
                     runCatching {
+                        webhookEventService.updateStatus(job.deliveryId, com.project.codereview.domain.model.WebhookEventStatus.PROCESSING)
                         codeReviewService.review(job.payload, job.contexts, job.model)
+                        webhookEventService.updateStatus(job.deliveryId, com.project.codereview.domain.model.WebhookEventStatus.COMPLETED)
                     }.onFailure { t ->
                         logger.error(
                             "[ReviewJob] failed worker={} cause={}",
@@ -44,6 +48,7 @@ class ReviewJobQueue(
                             t.message ?: t::class.java.simpleName,
                             t
                         )
+                        webhookEventService.updateStatus(job.deliveryId, com.project.codereview.domain.model.WebhookEventStatus.FAILED, t.message)
                     }
                 }
             }
@@ -52,8 +57,8 @@ class ReviewJobQueue(
         logger.info("[ReviewJobQueue] started workers={}", workerCount)
     }
 
-    fun enqueue(payload: GithubPayload, contexts: List<ReviewContext>, model: GeminiTextModel): Boolean {
-        val res = channel.trySend(ReviewJob(payload, contexts, model))
+    fun enqueue(deliveryId: String, payload: GithubPayload, contexts: List<ReviewContext>, model: GeminiTextModel): Boolean {
+        val res = channel.trySend(ReviewJob(deliveryId, payload, contexts, model))
         if (res.isFailure) {
             logger.warn("[ReviewJobQueue] enqueue failed cause={}", res.exceptionOrNull()?.message)
         }

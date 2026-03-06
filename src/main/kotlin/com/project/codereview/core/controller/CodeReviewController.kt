@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature
 import com.project.codereview.domain.model.GithubEvent
 import com.project.codereview.domain.model.GithubPayload
 import com.project.codereview.core.service.CodeReviewFacade
+import com.project.codereview.core.service.WebhookEventService
 import com.project.codereview.core.util.GithubSignature
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -19,13 +20,15 @@ import org.springframework.web.bind.annotation.RestController
 @RestController
 class CodeReviewController(
     @param:Value("\${app.github.webhook.secret-key}") private val secret: String,
-    private val codeReviewFacade: CodeReviewFacade
+    private val codeReviewFacade: CodeReviewFacade,
+    private val webhookEventService: WebhookEventService
 ) {
     private val log = LoggerFactory.getLogger(CodeReviewController::class.java)
     private val mapper = jacksonObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
     @PostMapping("/api/code/review")
     suspend fun webhook(
+        @RequestHeader("X-GitHub-Delivery") deliveryId: String,
         @RequestHeader("X-GitHub-Event") event: String,
         @RequestHeader("X-Hub-Signature-256", required = false) sig256: String?,
         @RequestBody rawBody: ByteArray
@@ -33,14 +36,23 @@ class CodeReviewController(
         if (sig256.isNullOrBlank()) return fail("Missing signature")
         if (!GithubSignature.isValid(sig256, secret, rawBody)) return fail("Invalid signature")
 
-        val githubEvent = GithubEvent(event) ?: return fail("Invalid event")
+        val payloadString = String(rawBody)
+        val eventEntity = webhookEventService.saveEvent(deliveryId, event, payloadString)
+            ?: return ResponseEntity.ok("Duplicate or ignored")
+
+        val githubEvent = GithubEvent(event) ?: run {
+            webhookEventService.updateStatus(deliveryId, com.project.codereview.domain.model.WebhookEventStatus.FAILED, "Invalid event: $event")
+            return fail("Invalid event")
+        }
+
         val payload: GithubPayload = try {
             mapper.readValue(rawBody)
         } catch (e: Exception) {
+            webhookEventService.updateStatus(deliveryId, com.project.codereview.domain.model.WebhookEventStatus.FAILED, "Invalid payload: ${e.message}")
             return fail("Invalid payload: ${e.message}", HttpStatus.NOT_ACCEPTABLE)
         }
 
-        codeReviewFacade.handle(githubEvent, payload)
+        codeReviewFacade.handle(deliveryId, githubEvent, payload)
 
         return ResponseEntity.ok("Accepted")
     }

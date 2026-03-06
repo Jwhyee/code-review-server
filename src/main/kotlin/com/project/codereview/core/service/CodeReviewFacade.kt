@@ -16,7 +16,8 @@ import org.springframework.stereotype.Service
 class CodeReviewFacade(
     private val reviewJobQueue: ReviewJobQueue,
     private val githubDiffClient: GithubDiffClient,
-    private val codeSummaryService: CodeSummaryService
+    private val codeSummaryService: CodeSummaryService,
+    private val webhookEventService: WebhookEventService
 ) {
     companion object {
         val SUMMARY_MODEL = GeminiTextModel.GEMINI_2_5_FLASH_LITE
@@ -24,38 +25,54 @@ class CodeReviewFacade(
     }
     private val logger = LoggerFactory.getLogger(CodeReviewFacade::class.java)
 
-    suspend fun handle(githubEvent: GithubEvent, payload: GithubPayload) = coroutineScope {
+    suspend fun handle(deliveryId: String, githubEvent: GithubEvent, payload: GithubPayload) = coroutineScope {
         val action = GithubActionType(payload.action)
             ?: throw IllegalArgumentException("Invalid action: ${payload.action}")
 
-        if (githubEvent != GithubEvent.PULL_REQUEST) return@coroutineScope
+        if (githubEvent != GithubEvent.PULL_REQUEST) {
+            webhookEventService.updateStatus(deliveryId, com.project.codereview.domain.model.WebhookEventStatus.COMPLETED)
+            return@coroutineScope
+        }
 
         val pullRequestPayload = payload.pull_request
 
         when (action) {
             GithubActionType.OPENED -> {
-                withPrContexts(pullRequestPayload, payload) { contexts ->
-                    codeSummaryService.summary(payload, contexts, SUMMARY_MODEL)
+                runCatching {
+                    webhookEventService.updateStatus(deliveryId, com.project.codereview.domain.model.WebhookEventStatus.PROCESSING)
+                    withPrContexts(pullRequestPayload, payload) { contexts ->
+                        codeSummaryService.summary(payload, contexts, SUMMARY_MODEL)
+                    }
+                    webhookEventService.updateStatus(deliveryId, com.project.codereview.domain.model.WebhookEventStatus.COMPLETED)
+                }.onFailure { t ->
+                    logger.error("Summary failed: {}", t.message)
+                    webhookEventService.updateStatus(deliveryId, com.project.codereview.domain.model.WebhookEventStatus.FAILED, t.message)
                 }
             }
 
             GithubActionType.LABELED -> {
                 if (!pullRequestPayload.hasReviewRequestLabel) {
                     logger.info("Ignored LABELED: no review label")
+                    webhookEventService.updateStatus(deliveryId, com.project.codereview.domain.model.WebhookEventStatus.COMPLETED)
                     return@coroutineScope
                 }
 
                 if (pullRequestPayload.isMergingToDefaultBranch) {
                     logger.info("Ignored LABELED: merging to default branch")
+                    webhookEventService.updateStatus(deliveryId, com.project.codereview.domain.model.WebhookEventStatus.COMPLETED)
                     return@coroutineScope
                 }
 
                 withPrContexts(pullRequestPayload, payload) { contexts ->
-                    reviewJobQueue.enqueue(payload, contexts, REVIEW_MODEL)
+                    reviewJobQueue.enqueue(deliveryId, payload, contexts, REVIEW_MODEL)
                 }
+                // Enqueued, status will be updated by Worker
             }
 
-            else -> logger.info("Ignored action: {}", action)
+            else -> {
+                logger.info("Ignored action: {}", action)
+                webhookEventService.updateStatus(deliveryId, com.project.codereview.domain.model.WebhookEventStatus.COMPLETED)
+            }
         }
     }
 

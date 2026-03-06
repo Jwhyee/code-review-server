@@ -4,6 +4,7 @@ import com.project.codereview.client.github.GithubReviewClient
 import com.project.codereview.domain.model.ReviewContext
 import com.project.codereview.domain.model.ReviewType
 import com.project.codereview.client.google.GoogleGeminiClient
+import com.project.codereview.client.google.GeminiRateLimiter
 import com.project.codereview.domain.model.GeminiTextModel
 import com.project.codereview.client.util.REJECT_REVIEW
 import com.project.codereview.client.util.SYSTEM_PROMPT_COMMON
@@ -13,8 +14,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import kotlin.random.Random
@@ -23,10 +22,10 @@ import kotlin.random.Random
 class CodeReviewService(
     private val googleGeminiClient: GoogleGeminiClient,
     private val githubReviewClient: GithubReviewClient,
+    private val rateLimiter: GeminiRateLimiter
 ) {
     companion object {
         private const val MAX_REVIEW_COUNT = 5
-        private const val MAX_CONCURRENCY = 3
         private const val MIN_BODY_LENGTH = 30
 
         private const val ONE_MINUTE_MS = 60_000L
@@ -35,7 +34,6 @@ class CodeReviewService(
     }
 
     private val logger = LoggerFactory.getLogger(CodeReviewService::class.java)
-    private val semaphore = Semaphore(MAX_CONCURRENCY)
 
     data class ReviewTask(
         val pr: PullRequestPayload, val ctx: ReviewContext
@@ -64,7 +62,7 @@ class CodeReviewService(
 
         tasks.mapIndexed { index, task ->
             async {
-                semaphore.withPermit {
+                rateLimiter.withPermit {
                     processOne(task, model, index + 1, tasks.size)
                 }
             }
