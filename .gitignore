@@ -38,6 +38,7 @@ out/
 ### AI ###
 .sisyphus/
 AGENTS.md
+/docs/*
 
 ### VS Code ###
 .vscode/

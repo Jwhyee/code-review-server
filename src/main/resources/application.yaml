@@ -1,7 +1,21 @@
 spring:
-  application:
-    name: "code-review"
-
+  datasource:
+    url: jdbc:h2:mem:codereview;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.H2Dialect
 app:
   github:
     app:
@@ -13,3 +27,8 @@ app:
       token: ${API_TOKEN_GITHUB}
   google:
     api-key: ${GEMINI_API_KEY}
+
+logging:
+  level:
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
