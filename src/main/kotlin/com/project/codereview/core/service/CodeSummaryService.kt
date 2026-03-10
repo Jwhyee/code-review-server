@@ -4,7 +4,7 @@ import com.project.codereview.client.github.GithubReviewClient
 import com.project.codereview.domain.model.ReviewContext
 import com.project.codereview.domain.model.ReviewType
 import com.project.codereview.client.google.GoogleGeminiClient
-import com.project.codereview.domain.model.GeminiTextModel
+import com.project.codereview.domain.model.GeminiModel
 import com.project.codereview.client.util.SUMMARY_PROMPT
 import com.project.codereview.domain.model.GithubPayload
 import org.slf4j.LoggerFactory
@@ -17,7 +17,7 @@ class CodeSummaryService(
 ) {
     private val logger = LoggerFactory.getLogger(CodeSummaryService::class.java)
 
-    suspend fun summary(payload: GithubPayload, fileContexts: List<ReviewContext>, model: GeminiTextModel) {
+    suspend fun summary(payload: GithubPayload, fileContexts: List<ReviewContext>, model: GeminiModel) {
         logger.info("[Summary] Making summary ...")
 
         val prompt = fileContexts.buildPrompt()
@@ -39,9 +39,9 @@ class CodeSummaryService(
     private suspend fun generateSummaryOnce(
         payload: GithubPayload,
         prompt: String,
-        model: GeminiTextModel
+        model: GeminiModel
     ): String? {
-        logger.info("[Summary] Try model={}", model.name)
+        logger.info("[Summary] Try model={}", model.modelName)
 
         return runCatching {
             googleGeminiClient.chat(
@@ -53,7 +53,7 @@ class CodeSummaryService(
         }.onFailure { e ->
             logger.warn(
                 "[Summary] Model failed model={} cause={}",
-                model.name,
+                model.modelName,
                 e.message ?: e::class.java.simpleName
             )
         }.getOrNull()

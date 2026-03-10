@@ -1,7 +1,7 @@
 package com.project.codereview.core.service
 
 import com.project.codereview.domain.model.ReviewContext
-import com.project.codereview.domain.model.GeminiTextModel
+import com.project.codereview.domain.model.GeminiModel
 import com.project.codereview.domain.model.GithubPayload
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
@@ -27,7 +27,7 @@ class ReviewJobQueue(
     data class ReviewJob(
         val payload: GithubPayload,
         val contexts: List<ReviewContext>,
-        val model: GeminiTextModel
+        val model: GeminiModel
     )
 
     @PostConstruct
@@ -52,7 +52,7 @@ class ReviewJobQueue(
         logger.info("[ReviewJobQueue] started workers={}", workerCount)
     }
 
-    fun enqueue(payload: GithubPayload, contexts: List<ReviewContext>, model: GeminiTextModel): Boolean {
+    fun enqueue(payload: GithubPayload, contexts: List<ReviewContext>, model: GeminiModel): Boolean {
         val res = channel.trySend(ReviewJob(payload, contexts, model))
         if (res.isFailure) {
             logger.warn("[ReviewJobQueue] enqueue failed cause={}", res.exceptionOrNull()?.message)

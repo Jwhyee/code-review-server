@@ -4,7 +4,7 @@ import com.project.codereview.client.github.GithubReviewClient
 import com.project.codereview.domain.model.ReviewContext
 import com.project.codereview.domain.model.ReviewType
 import com.project.codereview.client.google.GoogleGeminiClient
-import com.project.codereview.domain.model.GeminiTextModel
+import com.project.codereview.domain.model.GeminiModel
 import com.project.codereview.client.util.REJECT_REVIEW
 import com.project.codereview.client.util.SYSTEM_PROMPT_COMMON
 import com.project.codereview.domain.model.GithubPayload
@@ -47,7 +47,7 @@ class CodeReviewService(
     suspend fun review(
         payload: GithubPayload,
         contexts: List<ReviewContext>,
-        model: GeminiTextModel
+        model: GeminiModel
     ) = coroutineScope {
         val pr = payload.pull_request
 
@@ -73,7 +73,7 @@ class CodeReviewService(
         logger.info("[Review Completed] total={}", tasks.size)
     }
 
-    private suspend fun processOne(task: ReviewTask, model: GeminiTextModel, order: Int, total: Int) {
+    private suspend fun processOne(task: ReviewTask, model: GeminiModel, order: Int, total: Int) {
         val path = task.path
         if (path.isBlank()) {
             logger.warn("[Review Skip] Empty file path ({} / {})", order, total)
@@ -106,7 +106,7 @@ class CodeReviewService(
         cooldownAfterCall()
     }
 
-    private suspend fun callGeminiOrNull(path: String, prompt: String, model: GeminiTextModel) = try {
+    private suspend fun callGeminiOrNull(path: String, prompt: String, model: GeminiModel) = try {
         logger.info("[Using Model] {}", model.modelName)
         googleGeminiClient.chat(path, prompt, model, SYSTEM_PROMPT_COMMON)?.takeIf { it.isNotBlank() }
     } catch (t: Throwable) {

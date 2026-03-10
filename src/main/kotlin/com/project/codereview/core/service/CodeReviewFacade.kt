@@ -2,12 +2,13 @@ package com.project.codereview.core.service
 
 import com.project.codereview.client.github.GithubDiffClient
 import com.project.codereview.client.github.GithubDiffUtils
+import com.project.codereview.domain.model.GeminiType
 import com.project.codereview.domain.model.ReviewContext
-import com.project.codereview.domain.model.GeminiTextModel
 import com.project.codereview.domain.model.GithubActionType
 import com.project.codereview.domain.model.GithubEvent
 import com.project.codereview.domain.model.GithubPayload
 import com.project.codereview.domain.model.PullRequestPayload
+import com.project.codereview.domain.repository.GoogleGeminiModelRepository
 import kotlinx.coroutines.coroutineScope
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -16,12 +17,9 @@ import org.springframework.stereotype.Service
 class CodeReviewFacade(
     private val reviewJobQueue: ReviewJobQueue,
     private val githubDiffClient: GithubDiffClient,
-    private val codeSummaryService: CodeSummaryService
+    private val codeSummaryService: CodeSummaryService,
+    private val googleGeminiModelRepository: GoogleGeminiModelRepository
 ) {
-    companion object {
-        val SUMMARY_MODEL = GeminiTextModel.GEMINI_2_5_FLASH_LITE
-        val REVIEW_MODEL = GeminiTextModel.GEMINI_3_FLASH
-    }
     private val logger = LoggerFactory.getLogger(CodeReviewFacade::class.java)
 
     suspend fun handle(githubEvent: GithubEvent, payload: GithubPayload) = coroutineScope {
@@ -34,8 +32,9 @@ class CodeReviewFacade(
 
         when (action) {
             GithubActionType.OPENED -> {
+                val model = getModel(GeminiType.PRO).first()
                 withPrContexts(pullRequestPayload, payload) { contexts ->
-                    codeSummaryService.summary(payload, contexts, SUMMARY_MODEL)
+                    codeSummaryService.summary(payload, contexts, model)
                 }
             }
 
@@ -45,13 +44,9 @@ class CodeReviewFacade(
                     return@coroutineScope
                 }
 
-                if (pullRequestPayload.isMergingToDefaultBranch) {
-                    logger.info("Ignored LABELED: merging to default branch")
-                    return@coroutineScope
-                }
-
                 withPrContexts(pullRequestPayload, payload) { contexts ->
-                    reviewJobQueue.enqueue(payload, contexts, REVIEW_MODEL)
+                    val model = getModel(GeminiType.FLASH).first()
+                    reviewJobQueue.enqueue(payload, contexts, model)
                 }
             }
 
@@ -68,5 +63,9 @@ class CodeReviewFacade(
         val contexts = GithubDiffUtils.buildReviewContextsByFile(diff, githubPayload)
 
         block(contexts)
+    }
+
+    private suspend fun getModel(type: GeminiType) = googleGeminiModelRepository.models().filter {
+        it.type == type
     }
 }
