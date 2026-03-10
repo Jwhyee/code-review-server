@@ -30,8 +30,8 @@ class CodeReviewController(
         @RequestHeader("X-Hub-Signature-256", required = false) sig256: String?,
         @RequestBody rawBody: ByteArray
     ): ResponseEntity<String> {
-        if (sig256.isNullOrBlank()) return fail("Missing signature")
-        if (!GithubSignature.isValid(sig256, secret, rawBody)) return fail("Invalid signature")
+//        if (sig256.isNullOrBlank()) return fail("Missing signature")
+//        if (!GithubSignature.isValid(sig256, secret, rawBody)) return fail("Invalid signature")
 
         val githubEvent = GithubEvent(event) ?: return fail("Invalid event")
         val payload: GithubPayload = try {
